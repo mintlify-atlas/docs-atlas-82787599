@@ -60,8 +60,7 @@ This can happen due to:
 1. **Processing errors** - Check your logs for any errors during the scraping phase where TorBox Media Center attempts to get your files.
 
 2. **Incorrect folder permissions** - Make sure that Docker (or the user running Docker or the Python script) has access to the folder you have set.
-   - Use the `chown` command to change the permissions
-   - If using Docker, set the `PUID` and `PGID` environment variables to the user and group that owns the folder
+   - Use the `chown` command to change the permissions: `sudo chown -R $(whoami):$(whoami) /path/to/mount/folder`
 
 3. **Folder doesn't exist** - If you aren't using Docker or the easy setup scripts, the folder won't exist beforehand. Create it manually.
 

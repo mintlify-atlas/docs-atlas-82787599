@@ -91,24 +91,6 @@ TorBox Media Center is configured entirely through environment variables. You ca
   - Metadata scanning is available (if enabled)
 </ParamField>
 
-## Docker-specific variables
-
-<ParamField path="PUID" type="integer">
-  The User ID that should own the mounted files. Used in Docker to match file permissions with your host system.
-  
-  To find your user ID, run: `id -u`
-  
-  This helps ensure your media server can access the files created by TorBox Media Center.
-</ParamField>
-
-<ParamField path="PGID" type="integer">
-  The Group ID that should own the mounted files. Used in Docker to match file permissions with your host system.
-  
-  To find your group ID, run: `id -g`
-  
-  This helps ensure your media server can access the files created by TorBox Media Center.
-</ParamField>
-
 ## Configuration examples
 
 ### Using a .env file
@@ -158,8 +140,6 @@ services:
       - MOUNT_PATH=/torbox
       - MOUNT_REFRESH_TIME=normal
       - ENABLE_METADATA=false
-      - PUID=1000
-      - PGID=1000
     image: anonymoussystems/torbox-media-center:latest
 ```
 

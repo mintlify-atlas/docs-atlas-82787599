@@ -138,4 +138,4 @@ Verify:
 Ensure:
 1. The volume mapping uses the correct host path
 2. The user running Jellyfin/Emby has read permissions on the mount path
-3. Set `PUID` and `PGID` environment variables if needed
+3. Use `chown` to fix any permission issues on the mount directory

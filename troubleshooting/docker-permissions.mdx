@@ -17,61 +17,65 @@ If Docker creates files as `root` but your host user doesn't have permission to 
 - Permission denied when accessing files
 - Media servers unable to read the mounted files
 
-## Using PUID and PGID
+## Fixing permission issues
 
-The recommended solution is to tell Docker to run as your user by setting the `PUID` (User ID) and `PGID` (Group ID) environment variables.
+The recommended solution is to use `chown` to change the ownership of the mounted directory to your user.
 
-### Finding your UID and GID
+### Finding your user and group
 
-Get your current user's ID:
+Get your current user's ID and group:
 
 ```bash
 id -u  # Prints your user ID
 id -g  # Prints your group ID
+whoami # Prints your username
 ```
 
 Example output:
 ```
 1000  # User ID
 1000  # Group ID
+youruser # Username
 ```
 
-### Setting PUID and PGID in Docker
+### Using chown to fix permissions
 
-**Docker run command:**
+**Fix ownership for the mount directory:**
 
 ```bash
-docker run -it -d \
-  --name=torbox-media-center \
-  --restart=always \
-  -v /home/$(whoami)/torbox:/torbox \
-  -e PUID=$(id -u) \
-  -e PGID=$(id -g) \
-  -e TORBOX_API_KEY=<YOUR_KEY> \
-  -e MOUNT_PATH=/torbox \
-  anonymoussystems/torbox-media-center:latest
+sudo chown -R $(whoami):$(whoami) /home/$(whoami)/torbox
 ```
 
-**Docker Compose:**
+This command:
+- `-R`: Recursively changes ownership of all files and subdirectories
+- `$(whoami)`: Uses your current username for both user and group
+- Changes ownership of `/home/$(whoami)/torbox` and everything inside it
 
-```yaml
-name: torbox-media-center
-services:
-  torbox-media-center:
-    container_name: torbox-media-center
-    stdin_open: true
-    tty: true
-    restart: always
-    volumes:
-      - /home/youruser/torbox:/torbox
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TORBOX_API_KEY=<YOUR_KEY>
-      - MOUNT_METHOD=strm
-      - MOUNT_PATH=/torbox
-    image: anonymoussystems/torbox-media-center:latest
+**Fix ownership with specific user/group:**
+
+```bash
+sudo chown -R 1000:1000 /home/youruser/torbox
 ```
+
+Replace `1000:1000` with your actual UID:GID from the `id` command.
+
+### Verify permissions
+
+Check the permissions of your directory:
+
+```bash
+ls -la /home/$(whoami)/torbox
+```
+
+Expected output:
+```
+drwxr-xr-x 5 youruser youruser 4096 Mar 3 10:30 .
+drwxr-xr-x 3 youruser youruser 4096 Mar 3 10:25 ..
+drwxr-xr-x 2 youruser youruser 4096 Mar 3 10:30 movies
+drwxr-xr-x 2 youruser youruser 4096 Mar 3 10:30 series
+```
+
+The third and fourth columns should show your username.
 
 ## Volume mapping best practices
 
@@ -114,8 +118,6 @@ This configuration:
 docker run -d \
   --name=jellyfin \
   -v /home/wamy/torbox:/torbox-media-center \
-  -e PUID=1000 \
-  -e PGID=1000 \
   jellyfin/jellyfin:latest
 ```
 
@@ -127,49 +129,6 @@ This configuration:
 The container paths can be different (`/torbox` vs `/torbox-media-center`), but the host path must be the same (`/home/wamy/torbox`).
 </Warning>
 
-## Fixing existing permission issues
-
-If you already have files with incorrect permissions, you can fix them using `chown`.
-
-### Using chown to fix permissions
-
-**Fix ownership for a directory:**
-
-```bash
-sudo chown -R $(whoami):$(whoami) /home/$(whoami)/torbox
-```
-
-This command:
-- `-R`: Recursively changes ownership of all files and subdirectories
-- `$(whoami)`: Uses your current username for both user and group
-- Changes ownership of `/home/$(whoami)/torbox` and everything inside it
-
-**Fix ownership with specific user/group:**
-
-```bash
-sudo chown -R 1000:1000 /home/youruser/torbox
-```
-
-Replace `1000:1000` with your actual UID:GID.
-
-### Verify permissions
-
-Check the permissions of your directory:
-
-```bash
-ls -la /home/$(whoami)/torbox
-```
-
-Expected output:
-```
-drwxr-xr-x 5 youruser youruser 4096 Mar 3 10:30 .
-drwxr-xr-x 3 youruser youruser 4096 Mar 3 10:25 ..
-drwxr-xr-x 2 youruser youruser 4096 Mar 3 10:30 movies
-drwxr-xr-x 2 youruser youruser 4096 Mar 3 10:30 series
-```
-
-The third and fourth columns should show your username.
-
 ## Common permission errors
 
 ### Error: Permission denied
@@ -178,7 +137,11 @@ The third and fourth columns should show your username.
 PermissionError: [Errno 13] Permission denied: '/torbox/movies'
 ```
 
-**Solution:** Set PUID and PGID to match your user, or use `chown` to fix existing permissions.
+**Solution:** Use `chown` to fix the directory permissions:
+
+```bash
+sudo chown -R $(whoami):$(whoami) /home/$(whoami)/torbox
+```
 
 ### Error: Cannot create directory
 
@@ -190,14 +153,14 @@ OSError: [Errno 13] Permission denied: '/torbox'
 
 ```bash
 mkdir -p /home/$(whoami)/torbox
-chown -R $(whoami):$(whoami) /home/$(whoami)/torbox
+sudo chown -R $(whoami):$(whoami) /home/$(whoami)/torbox
 ```
 
 ### Error: Files owned by root
 
 If files are created as `root:root`, your media server may not be able to read them.
 
-**Solution:** Stop the container, fix permissions, and restart with PUID/PGID:
+**Solution:** Stop the container, fix permissions, and restart:
 
 ```bash
 # Stop container
@@ -206,18 +169,8 @@ docker stop torbox-media-center
 # Fix permissions
 sudo chown -R $(whoami):$(whoami) /home/$(whoami)/torbox
 
-# Remove old container
-docker rm torbox-media-center
-
-# Start with PUID/PGID
-docker run -it -d \
-  --name=torbox-media-center \
-  -v /home/$(whoami)/torbox:/torbox \
-  -e PUID=$(id -u) \
-  -e PGID=$(id -g) \
-  -e TORBOX_API_KEY=<YOUR_KEY> \
-  -e MOUNT_PATH=/torbox \
-  anonymoussystems/torbox-media-center:latest
+# Start container again
+docker start torbox-media-center
 ```
 
 ## FUSE-specific permissions
@@ -259,8 +212,6 @@ services:
     devices:
       - /dev/fuse:/dev/fuse
     environment:
-      - PUID=1000
-      - PGID=1000
       - TORBOX_API_KEY=<YOUR_KEY>
       - MOUNT_METHOD=fuse
       - MOUNT_PATH=/torbox
@@ -277,7 +228,7 @@ See the [FUSE issues](/troubleshooting/fuse-issues) guide for more FUSE-specific
 
 | Issue | Solution |
 |-------|----------|
-| Files owned by root | Set `PUID` and `PGID` environment variables |
+| Files owned by root | Use `chown -R $(whoami):$(whoami)` on the mount directory |
 | Permission denied errors | Use `chown -R $(whoami):$(whoami)` on the mount directory |
 | Media server can't access files | Ensure both containers map the same host directory |
 | Directory doesn't exist | Create it with `mkdir -p` before running the container |

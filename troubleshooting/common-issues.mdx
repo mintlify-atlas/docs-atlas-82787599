@@ -28,23 +28,10 @@ This guide covers the most common issues you may encounter when using TorBox Med
     **Fix using chown:**
 
     ```bash
-    chown -R $(whoami):$(whoami) /path/to/torbox/folder
+    sudo chown -R $(whoami):$(whoami) /home/$(whoami)/torbox
     ```
 
-    **Fix using PUID/PGID in Docker:**
-
-    If using Docker, you can set the environmental variables `PUID` and `PGID` to the user and group that owns the folder:
-
-    ```bash
-    docker run -it -d \
-      --name=torbox-media-center \
-      -v /home/$(whoami)/torbox:/torbox \
-      -e PUID=$(id -u) \
-      -e PGID=$(id -g) \
-      -e TORBOX_API_KEY=<YOUR_KEY> \
-      -e MOUNT_PATH=/torbox \
-      anonymoussystems/torbox-media-center:latest
-    ```
+    This command recursively changes ownership of the folder to your user, ensuring the application can read and write files.
 
     ### Folder does not exist
 
