@@ -1,0 +1,103 @@
+{
+  "projectType": "cli-tool",
+  "projectName": "TorBox Media Center",
+  "projectDescription": "Mount your TorBox account to your local system for use with Jellyfin, Plex, Emby, and other media players.",
+  "theme": "aspen",
+  "primaryColor": "#8B5CF6",
+  "lightColor": "#A78BFA",
+  "darkColor": "#6D28D9",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Installation",
+            "pages": [
+              "installation/docker",
+              "installation/local",
+              "installation/scripts"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/environment-variables",
+              "configuration/mount-methods",
+              "configuration/choosing-mount-method"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/media-server-setup",
+              "guides/jellyfin-emby",
+              "guides/plex",
+              "guides/raw-mode",
+              "guides/metadata-scanning"
+            ]
+          },
+          {
+            "group": "Troubleshooting",
+            "pages": [
+              "troubleshooting/common-issues",
+              "troubleshooting/docker-permissions",
+              "troubleshooting/fuse-issues"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Core Functions",
+            "pages": [
+              "api/app-functions",
+              "api/torbox-functions",
+              "api/filesystem-functions"
+            ]
+          },
+          {
+            "group": "Utilities",
+            "pages": [
+              "api/database-functions",
+              "api/media-functions"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Virtual filesystem mounting (FUSE) and .strm file generation",
+    "Automatic media organization using TorBox Metadata Search API",
+    "Support for Jellyfin, Emby, Plex, and other media players",
+    "Cross-platform compatibility (Linux, macOS, Windows via .strm)",
+    "Docker and local Python installation support",
+    "Automatic library updates and refresh scheduling",
+    "Raw mode for preserving original file structure"
+  ],
+  "publicApiSurface": [
+    "getUserDownloads(type: DownloadType)",
+    "searchMetadata(query, title_data, file_name, full_title, hash, item_name)",
+    "getDownloadLink(url)",
+    "downloadFile(url, size, offset)",
+    "bootUp()",
+    "getAllUserDownloadsFresh()",
+    "getMountMethod()",
+    "getMountPath()",
+    "getMountRefreshTime()",
+    "runStrm()",
+    "runFuse()",
+    "unmountFuse()",
+    "unmountStrm()"
+  ]
+}
