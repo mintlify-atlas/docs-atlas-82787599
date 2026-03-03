@@ -1,0 +1,190 @@
+---
+title: Environment variables
+description: Configure TorBox Media Center using environment variables
+---
+
+TorBox Media Center is configured entirely through environment variables. You can set these in a `.env` file or pass them directly to Docker.
+
+## Required variables
+
+<ParamField path="TORBOX_API_KEY" type="string" required>
+  Your TorBox API key used to authenticate with TorBox. You can find this in your [TorBox account settings](https://torbox.app/settings).
+  
+  This variable is required for the application to function.
+</ParamField>
+
+## Mount configuration
+
+<ParamField path="MOUNT_METHOD" type="string" default="strm">
+  The mounting method to use for your media files. 
+  
+  **Valid values:**
+  - `strm` - Creates `.strm` text files that point to your media (recommended for Jellyfin/Emby)
+  - `fuse` - Creates a virtual filesystem using FUSE (recommended for Plex/VLC/other players)
+  
+  See [Mount methods](/configuration/mount-methods) for detailed information about each option.
+</ParamField>
+
+<ParamField path="MOUNT_PATH" type="string" default="./torbox">
+  The filesystem path where your media files will be accessible.
+  
+  **Docker considerations:**
+  - This path should match the container's mount point (typically `/torbox`)
+  - The path must be accessible to other applications like Plex or Jellyfin
+  - You need to map this path to your host system using Docker volumes
+  
+  **Local installation:**
+  - The path must exist and be owned by the user running the application
+  - Common paths: `/home/username/torbox` or `~/torbox`
+</ParamField>
+
+<ParamField path="MOUNT_REFRESH_TIME" type="string" default="normal">
+  How frequently the application checks for new files in your TorBox account.
+  
+  **Valid values:**
+  - `slowest` - Every 24 hours
+  - `very_slow` - Every 12 hours
+  - `slow` - Every 6 hours
+  - `normal` - Every 3 hours (default)
+  - `fast` - Every 2 hours
+  - `ultra_fast` - Every 1 hour
+  - `instant` - Every 6 minutes (requires `ENABLE_METADATA=true`, may cause rate limiting)
+  
+  <Warning>
+    The `instant` refresh time may cause rate limiting issues with the TorBox API. When combined with metadata scanning, it automatically falls back to `fast` refresh time.
+  </Warning>
+</ParamField>
+
+## Metadata and organization
+
+<ParamField path="ENABLE_METADATA" type="boolean" default="false">
+  Enable automatic metadata scanning and organization of your media files.
+  
+  **When enabled (`true`):**
+  - TorBox attempts to identify each file using the Metadata Search API
+  - Files are automatically organized into `movies` or `series` folders
+  - Files are properly named for media server recognition
+  - Unlocks the `instant` refresh time option
+  - You may encounter 429 (rate limit) errors during heavy scanning
+  
+  **When disabled (`false`):**
+  - All video files are placed in the `movies` folder without scanning
+  - Faster processing with no API rate limits
+  - Better for users who manually organize their libraries
+  
+  <Note>
+    Metadata scanning is automatically disabled when `RAW_MODE=true`.
+  </Note>
+</ParamField>
+
+<ParamField path="RAW_MODE" type="boolean" default="false">
+  Present files in their original structure, similar to WebDAV.
+  
+  **When enabled (`true`):**
+  - Files appear in the same structure as your TorBox downloads
+  - No automatic organization or renaming
+  - `ENABLE_METADATA` is automatically disabled
+  - Useful for advanced users who want full control
+  
+  **When disabled (`false`):**
+  - Files are organized into `movies` and `series` folders
+  - Metadata scanning is available (if enabled)
+</ParamField>
+
+## Docker-specific variables
+
+<ParamField path="PUID" type="integer">
+  The User ID that should own the mounted files. Used in Docker to match file permissions with your host system.
+  
+  To find your user ID, run: `id -u`
+  
+  This helps ensure your media server can access the files created by TorBox Media Center.
+</ParamField>
+
+<ParamField path="PGID" type="integer">
+  The Group ID that should own the mounted files. Used in Docker to match file permissions with your host system.
+  
+  To find your group ID, run: `id -g`
+  
+  This helps ensure your media server can access the files created by TorBox Media Center.
+</ParamField>
+
+## Configuration examples
+
+### Using a .env file
+
+Create a `.env` file in your project directory:
+
+```bash .env
+TORBOX_API_KEY=your_api_key_here
+MOUNT_METHOD=strm
+MOUNT_PATH=/torbox
+MOUNT_REFRESH_TIME=normal
+ENABLE_METADATA=false
+RAW_MODE=false
+```
+
+### Using Docker run command
+
+```bash
+docker run -it -d \
+    --name=torbox-media-center \
+    --restart=always \
+    --init \
+    -v /home/$(whoami)/torbox:/torbox \
+    -e TORBOX_API_KEY=your_api_key_here \
+    -e MOUNT_METHOD=strm \
+    -e MOUNT_PATH=/torbox \
+    -e MOUNT_REFRESH_TIME=normal \
+    -e ENABLE_METADATA=false \
+    anonymoussystems/torbox-media-center:latest
+```
+
+### Using Docker Compose
+
+```yaml docker-compose.yaml
+name: torbox-media-center
+services:
+  torbox-media-center:
+    container_name: torbox-media-center
+    stdin_open: true
+    tty: true
+    restart: always
+    volumes:
+      - /home/user/torbox:/torbox
+    environment:
+      - TORBOX_API_KEY=your_api_key_here
+      - MOUNT_METHOD=strm
+      - MOUNT_PATH=/torbox
+      - MOUNT_REFRESH_TIME=normal
+      - ENABLE_METADATA=false
+      - PUID=1000
+      - PGID=1000
+    image: anonymoussystems/torbox-media-center:latest
+```
+
+### With FUSE mount method
+
+```yaml docker-compose.yaml
+name: torbox-media-center
+services:
+  torbox-media-center:
+    container_name: torbox-media-center
+    stdin_open: true
+    tty: true
+    restart: always
+    volumes:
+      - /home/user/torbox:/torbox
+    devices:
+      - /dev/fuse:/dev/fuse
+    environment:
+      - TORBOX_API_KEY=your_api_key_here
+      - MOUNT_METHOD=fuse
+      - MOUNT_PATH=/torbox
+      - MOUNT_REFRESH_TIME=normal
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - apparmor:unconfined
+    image: anonymoussystems/torbox-media-center:latest
+```

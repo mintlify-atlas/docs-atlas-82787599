@@ -1,0 +1,180 @@
+---
+title: Plex setup
+description: Set up TorBox Media Center with Plex using FUSE virtual filesystem
+---
+
+Plex works best with the FUSE mounting method, which mounts your TorBox media as a virtual filesystem. This makes files appear as if they're stored locally on your system, allowing Plex to scan and play them like any other media.
+
+## Why use FUSE for Plex?
+
+The FUSE mounting method is recommended for Plex and other media players that don't support STRM files:
+
+- **Native filesystem** - Files appear as real files to Plex
+- **Broad compatibility** - Works with Plex, VLC, Infuse, and any media player
+- **Zero storage** - Virtual files take up no disk space
+- **Direct streaming** - TorBox Media Center handles streaming in the background
+
+<Tip>
+For Plex, VLC, Infuse, and most other media players, use `MOUNT_METHOD=fuse`
+</Tip>
+
+## System requirements
+
+The FUSE method requires:
+
+- **Linux/Unix/BSD** based system
+- **FUSE kernel support** - Most Linux systems have this built-in
+- **MacOS** - Supported via [MacFUSE](https://macfuse.github.io/)
+- **Not Windows** - Windows doesn't support FUSE natively
+
+<Note>
+If you're unsure whether your system supports FUSE, try running the container. It will give an error if FUSE is unavailable.
+</Note>
+
+## Setup steps
+
+<Steps>
+  <Step title="Configure TorBox Media Center for FUSE">
+    Set the `MOUNT_METHOD` environment variable to `fuse` and add required Docker capabilities:
+
+    ```bash
+    docker run -it -d \
+        --name=torbox-media-center \
+        --restart=always \
+        --init \
+        -v /home/$(whoami)/torbox:/torbox \
+        --device /dev/fuse:/dev/fuse \
+        --cap-add SYS_ADMIN \
+        --security-opt apparmor:unconfined \
+        -e TORBOX_API_KEY=<YOUR_API_KEY> \
+        -e MOUNT_METHOD=fuse \
+        -e MOUNT_PATH=/torbox \
+        anonymoussystems/torbox-media-center:latest
+    ```
+
+    Or with Docker Compose:
+
+    ```yaml
+    name: torbox-media-center
+    services:
+        torbox-media-center:
+            container_name: torbox-media-center
+            stdin_open: true
+            tty: true
+            restart: always
+            volumes:
+                - /home/$(whoami)/torbox:/torbox
+            devices:
+                - /dev/fuse:/dev/fuse
+            environment:
+                - TORBOX_API_KEY=<YOUR_API_KEY>
+                - MOUNT_METHOD=fuse
+                - MOUNT_PATH=/torbox
+            cap_add:
+                - SYS_ADMIN
+            security_opt:
+                - apparmor:unconfined
+            image: anonymoussystems/torbox-media-center:latest
+    ```
+
+    <Warning>
+    The `--device`, `--cap-add`, and `--security-opt` flags are **required** for FUSE to work in Docker.
+    </Warning>
+  </Step>
+
+  <Step title="Configure Plex volume mapping">
+    Add the TorBox Media Center path to your Plex container. Use the **host system path**:
+
+    ```bash
+    -v /home/$(whoami)/torbox:/torbox-media-center
+    ```
+
+    This makes the files available inside your Plex container at `/torbox-media-center`.
+  </Step>
+
+  <Step title="Add libraries in Plex">
+    In your Plex web interface:
+
+    1. Go to Settings > Libraries
+    2. Click "Add Library"
+    3. For Movies:
+       - Library type: Movies
+       - Add folder: `/torbox-media-center/movies`
+    4. Click "Add Library" again
+    5. For TV Shows:
+       - Library type: TV Shows
+       - Add folder: `/torbox-media-center/series`
+    6. Save and scan libraries
+  </Step>
+
+  <Step title="Configure library scanning">
+    Configure Plex to scan for new content:
+
+    1. Go to Settings > Library
+    2. Set "Scan my library automatically" based on your needs
+    3. Consider your `MOUNT_REFRESH_TIME` when setting scan intervals
+  </Step>
+</Steps>
+
+## Understanding the FUSE mount
+
+FUSE (Filesystem in Userspace) creates a virtual filesystem that:
+
+- Emulates a real filesystem on your computer
+- Makes files appear as if they're stored locally
+- Handles streaming from TorBox in the background
+- Presents zero-byte placeholder files that expand when accessed
+
+### Read-only filesystem
+
+The FUSE mount is **read-only by design**. You cannot:
+
+- Rename files
+- Delete files
+- Move files around
+- Modify file metadata
+
+<Tip>
+To delete a file, remove it from your TorBox account. The mount will update automatically on the next refresh.
+</Tip>
+
+## Performance considerations
+
+The FUSE method can have some performance impacts:
+
+- **Slower file listing** - Reading directory structures can be slower than physical files
+- **Higher resource usage** - Emulating a filesystem uses more CPU and memory
+- **Docker compatibility** - May not play well with some Docker setups
+
+For most users, these impacts are minimal and worth the trade-off for Plex compatibility.
+
+## Troubleshooting
+
+### FUSE mount fails to start
+
+Check that:
+1. Your system supports FUSE (Linux/Unix/MacOS only)
+2. Docker has the required capabilities (`--cap-add SYS_ADMIN`)
+3. The `/dev/fuse` device is mapped (`--device /dev/fuse:/dev/fuse`)
+4. AppArmor isn't blocking FUSE (`--security-opt apparmor:unconfined`)
+
+### Plex can't see files
+
+Verify:
+1. Volume mapping uses the correct host system path
+2. Plex container has the same mount path configured
+3. File permissions allow the Plex user to read the mount path
+
+### Playback is slow or buffering
+
+Consider:
+1. Your internet connection speed to TorBox
+2. Enabling the proxy option if your connection is slow
+3. Checking TorBox service status
+
+### Cannot modify files error
+
+The FUSE mount is read-only by design. To manage files:
+1. Use your TorBox account to delete/modify downloads
+2. Wait for the next mount refresh
+3. Plex will see the updated library

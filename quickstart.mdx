@@ -1,80 +1,302 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart
+description: Get TorBox Media Center running in under 5 minutes
 ---
 
-## Get started in three steps
+## Prerequisites
 
-Get your documentation site running locally and make your first customization.
+Before you begin, ensure you have:
 
-### Step 1: Set up your local environment
+- A TorBox account on a paid plan ([sign up here](https://torbox.app/subscription))
+- Docker installed on your system ([installation guide](https://docs.docker.com/get-docker/))
+- Your TorBox API key from [torbox.app/settings](https://torbox.app/settings)
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+<Note>
+  If you don't have Docker installed, see our [local installation guide](/installation/local) for running without Docker.
+</Note>
 
-### Step 2: Deploy your changes
+## Get started with Docker
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+<Steps>
+  <Step title="Get your TorBox API key">
+    Navigate to [torbox.app/settings](https://torbox.app/settings) and copy your API key. You'll need this in the next step.
+  </Step>
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+  <Step title="Run the Docker command">
+    Copy and run this command, replacing `<YOUR_API_KEY>` with your actual API key:
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+    ```bash
+    docker run -it -d \
+        --name=torbox-media-center \
+        --restart=always \
+        --init \
+        -v /home/$(whoami)/torbox:/torbox \
+        -e TORBOX_API_KEY=<YOUR_API_KEY> \
+        -e MOUNT_METHOD=strm \
+        -e MOUNT_PATH=/torbox \
+        anonymoussystems/torbox-media-center:latest
+    ```
 
-### Step 3: Go live
+    <Accordion title="What do these options mean?">
+      - `--name=torbox-media-center`: Names your container for easy management
+      - `--restart=always`: Automatically restarts the container if it stops
+      - `-v /home/$(whoami)/torbox:/torbox`: Mounts files to `/home/YOUR_USERNAME/torbox` on your system
+      - `-e TORBOX_API_KEY`: Your TorBox API key for authentication
+      - `-e MOUNT_METHOD=strm`: Uses STRM method (best for Jellyfin/Emby)
+      - `-e MOUNT_PATH=/torbox`: Mount location inside the container
+    </Accordion>
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
+    <Info>
+      **Using Plex or VLC?** Change `MOUNT_METHOD=strm` to `MOUNT_METHOD=fuse` and add these additional flags:
+      ```bash
+      --device /dev/fuse:/dev/fuse \
+      --cap-add SYS_ADMIN \
+      --security-opt apparmor:unconfined
+      ```
+      See the [FUSE configuration guide](/configuration/choosing-mount-method) for details.
+    </Info>
+  </Step>
+
+  <Step title="Wait for initial sync">
+    The Media Center will automatically:
+    1. Connect to your TorBox account
+    2. Scan your downloads for video files
+    3. Organize them into `movies` and `series` folders (if metadata is enabled)
+    4. Mount them to `/home/YOUR_USERNAME/torbox`
+
+    Check the logs to monitor progress:
+    ```bash
+    docker logs -f torbox-media-center
+    ```
+
+    You should see output like:
+    ```
+    2024-03-15 10:30:45,123 root INFO Starting scheduler and mounting...
+    2024-03-15 10:30:46,456 root INFO Mount method: strm
+    2024-03-15 10:30:47,789 root INFO Processing downloads...
+    ```
+  </Step>
+
+  <Step title="Verify your mount">
+    Check that your media files are accessible:
+
+    ```bash
+    ls /home/$(whoami)/torbox
+    ```
+
+    You should see:
+    ```
+    movies/
+    series/
+    ```
+
+    <Accordion title="Not seeing any files?">
+      This can happen for a few reasons:
+      
+      1. **No video files in TorBox**: Make sure you have video downloads in your TorBox account
+      2. **Still processing**: Check `docker logs torbox-media-center` for errors
+      3. **Permission issues**: Run `sudo chown -R $(whoami):$(whoami) /home/$(whoami)/torbox`
+      
+      See the [troubleshooting guide](/troubleshooting/common-issues) for more help.
+    </Accordion>
+  </Step>
+
+  <Step title="Connect your media server">
+    Now point your media player to the mounted directory:
+
+    <Tabs>
+      <Tab title="Jellyfin/Emby">
+        Add a new library and point it to:
+        - **Movies**: `/home/YOUR_USERNAME/torbox/movies`
+        - **TV Shows**: `/home/YOUR_USERNAME/torbox/series`
+
+        <Warning>
+          If Jellyfin/Emby is also running in Docker, you need to mount the same directory. See the [media server setup guide](/guides/media-server-setup) for detailed instructions.
+        </Warning>
+      </Tab>
+      <Tab title="Plex">
+        Add a new library and point it to:
+        - **Movies**: `/home/YOUR_USERNAME/torbox/movies`
+        - **TV Shows**: `/home/YOUR_USERNAME/torbox/series`
+
+        <Note>
+          Plex requires the FUSE mount method. Make sure you set `MOUNT_METHOD=fuse` when running the container.
+        </Note>
+      </Tab>
+      <Tab title="Infuse/VLC">
+        Add a network share or local folder pointing to:
+        - `/home/YOUR_USERNAME/torbox/movies`
+        - `/home/YOUR_USERNAME/torbox/series`
+      </Tab>
+    </Tabs>
+  </Step>
+</Steps>
+
+## Basic configuration
+
+The default configuration works for most users, but you can customize these settings:
+
+### Change refresh interval
+
+By default, TorBox Media Center checks for new files every 3 hours. To change this:
+
+```bash
+docker run -it -d \
+    --name=torbox-media-center \
+    --restart=always \
+    --init \
+    -v /home/$(whoami)/torbox:/torbox \
+    -e TORBOX_API_KEY=<YOUR_API_KEY> \
+    -e MOUNT_METHOD=strm \
+    -e MOUNT_PATH=/torbox \
+    -e MOUNT_REFRESH_TIME=fast \  # Check every 2 hours
+    anonymoussystems/torbox-media-center:latest
+```
+
+Options: `slowest` (24h), `very_slow` (12h), `slow` (6h), `normal` (3h), `fast` (2h), `ultra_fast` (1h)
+
+### Enable metadata scanning
+
+By default, metadata scanning is disabled and all videos go to the `movies` folder. Enable it for automatic TV show detection:
+
+```bash
+-e ENABLE_METADATA=true
+```
+
+<Warning>
+  Metadata scanning uses the TorBox Search API and is subject to rate limiting. You may see 429 errors during peak usage.
+</Warning>
+
+### Use raw mode
+
+To keep the original file structure (like WebDAV):
+
+```bash
+-e RAW_MODE=true
+```
+
+This disables metadata scanning and preserves your original folder structure.
+
+See the [environment variables reference](/configuration/environment-variables) for all available options.
+
+## Docker Compose (alternative)
+
+If you prefer Docker Compose, create a `docker-compose.yaml` file:
+
+```yaml docker-compose.yaml
+name: torbox-media-center
+services:
+    torbox-media-center:
+        container_name: torbox-media-center
+        stdin_open: true
+        tty: true
+        restart: always
+        volumes:
+            - /home/$(whoami)/torbox:/torbox
+        environment:
+            - TORBOX_API_KEY=<YOUR_API_KEY>
+            - MOUNT_METHOD=strm
+            - MOUNT_PATH=/torbox
+        image: anonymoussystems/torbox-media-center:latest
+```
+
+Then run:
+
+```bash
+docker compose up -d
+```
+
+<Accordion title="Docker Compose for FUSE method">
+```yaml docker-compose.yaml
+name: torbox-media-center
+services:
+    torbox-media-center:
+        container_name: torbox-media-center
+        stdin_open: true
+        tty: true
+        restart: always
+        volumes:
+            - /home/$(whoami)/torbox:/torbox
+        devices:
+            - /dev/fuse:/dev/fuse
+        environment:
+            - TORBOX_API_KEY=<YOUR_API_KEY>
+            - MOUNT_METHOD=fuse
+            - MOUNT_PATH=/torbox
+        cap_add:
+            - SYS_ADMIN
+        security_opt:
+            - apparmor:unconfined
+        image: anonymoussystems/torbox-media-center:latest
+```
 </Accordion>
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
-
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card
+    title="Configure environment variables"
+    icon="sliders"
+    href="/configuration/environment-variables"
+  >
+    Customize refresh times, metadata scanning, mount methods, and more
+  </Card>
+  <Card
+    title="Set up your media server"
+    icon="tv"
+    href="/guides/media-server-setup"
+  >
+    Detailed guides for Jellyfin, Plex, Emby, and other media players
+  </Card>
+  <Card
+    title="Troubleshooting"
+    icon="wrench"
+    href="/troubleshooting/common-issues"
+  >
+    Common issues and solutions for Docker, permissions, and mounting
+  </Card>
+  <Card
+    title="Local installation"
+    icon="code"
+    href="/installation/local"
+  >
+    Run TorBox Media Center without Docker using Python
+  </Card>
 </CardGroup>
 
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>
+## Useful commands
+
+<AccordionGroup>
+  <Accordion title="View logs">
+    ```bash
+    docker logs -f torbox-media-center
+    ```
+  </Accordion>
+
+  <Accordion title="Restart container">
+    ```bash
+    docker restart torbox-media-center
+    ```
+  </Accordion>
+
+  <Accordion title="Stop container">
+    ```bash
+    docker stop torbox-media-center
+    ```
+  </Accordion>
+
+  <Accordion title="Update to latest version">
+    ```bash
+    docker stop torbox-media-center
+    docker rm torbox-media-center
+    docker pull anonymoussystems/torbox-media-center:latest
+    # Then run your docker run command again
+    ```
+  </Accordion>
+
+  <Accordion title="Check mount status">
+    ```bash
+    ls -lah /home/$(whoami)/torbox
+    ```
+  </Accordion>
+</AccordionGroup>

@@ -1,0 +1,385 @@
+---
+title: Filesystem functions
+description: FUSE and STRM filesystem implementation functions
+---
+
+The filesystem functions modules provide two different methods for exposing TorBox downloads as a virtual filesystem: FUSE (userspace filesystem) and STRM (media player stream files).
+
+## FUSE filesystem (fuseFilesystemFunctions.py)
+
+The FUSE implementation creates a virtual filesystem that streams content directly from TorBox on-demand.
+
+### VirtualFileSystem class
+
+```python
+class VirtualFileSystem:
+    def __init__(self, files_list)
+```
+
+Builds an in-memory representation of the filesystem structure based on the user's downloads.
+
+<ParamField path="files_list" type="list" required>
+  List of download file dictionaries from the database.
+</ParamField>
+
+**Instance methods:**
+
+#### is_dir
+
+```python
+def is_dir(self, path)
+```
+
+Checks if a path is a directory.
+
+<ParamField path="path" type="str" required>
+  The path to check.
+</ParamField>
+
+<ResponseField name="return" type="bool">
+  True if the path is a directory.
+</ResponseField>
+
+#### is_file
+
+```python
+def is_file(self, path)
+```
+
+Checks if a path is a file.
+
+<ParamField path="path" type="str" required>
+  The path to check.
+</ParamField>
+
+<ResponseField name="return" type="bool">
+  True if the path is a file.
+</ResponseField>
+
+#### get_file
+
+```python
+def get_file(self, path)
+```
+
+Retrieves file metadata for a given path.
+
+<ParamField path="path" type="str" required>
+  The path to the file.
+</ParamField>
+
+<ResponseField name="return" type="dict | None">
+  The file metadata dictionary, or None if not found.
+</ResponseField>
+
+#### list_dir
+
+```python
+def list_dir(self, path)
+```
+
+Lists the contents of a directory.
+
+<ParamField path="path" type="str" required>
+  The directory path.
+</ParamField>
+
+<ResponseField name="return" type="list">
+  A sorted list of filenames/directory names in the directory.
+</ResponseField>
+
+**Example:**
+
+```python
+from functions.fuseFilesystemFunctions import VirtualFileSystem
+from functions.appFunctions import getAllUserDownloads
+
+files = getAllUserDownloads()
+vfs = VirtualFileSystem(files)
+
+if vfs.is_dir('/movies'):
+    contents = vfs.list_dir('/movies')
+    print(f"Movies folder contains: {contents}")
+
+if vfs.is_file('/movies/The Matrix (1999)/The Matrix (1999).mkv'):
+    file_info = vfs.get_file('/movies/The Matrix (1999)/The Matrix (1999).mkv')
+    print(f"File size: {file_info['file_size']} bytes")
+```
+
+### TorBoxMediaCenterFuse class
+
+```python
+class TorBoxMediaCenterFuse(Fuse):
+    def __init__(self, *args, **kwargs)
+```
+
+The main FUSE filesystem implementation that handles all filesystem operations.
+
+**Key methods:**
+
+#### getattr
+
+```python
+def getattr(self, path)
+```
+
+Returns file attributes (size, permissions, timestamps) for a given path.
+
+<ParamField path="path" type="str" required>
+  The path to get attributes for.
+</ParamField>
+
+<ResponseField name="return" type="FuseStat | int">
+  A stat object with file attributes, or a negative errno value on error.
+</ResponseField>
+
+#### readdir
+
+```python
+def readdir(self, path, _)
+```
+
+Lists directory contents.
+
+<ParamField path="path" type="str" required>
+  The directory path.
+</ParamField>
+
+<ResponseField name="return" type="generator">
+  Yields directory entries.
+</ResponseField>
+
+#### read
+
+```python
+def read(self, path, size, offset)
+```
+
+Reads data from a file at the specified offset. Implements block-based caching for efficient streaming.
+
+<ParamField path="path" type="str" required>
+  The file path to read from.
+</ParamField>
+
+<ParamField path="size" type="int" required>
+  Number of bytes to read.
+</ParamField>
+
+<ParamField path="offset" type="int" required>
+  Starting byte offset.
+</ParamField>
+
+<ResponseField name="return" type="bytes | int">
+  The file content bytes, or a negative errno value on error.
+</ResponseField>
+
+**Caching behavior:**
+- Uses 64MB blocks for efficient downloading
+- Caches up to 64 blocks per file (4GB total)
+- Implements LRU (Least Recently Used) cache eviction
+- Download links are cached for 3 hours
+
+### runFuse
+
+```python
+def runFuse()
+```
+
+Starts the FUSE filesystem server.
+
+<ResponseField name="return" type="None">
+  This function blocks until the filesystem is unmounted.
+</ResponseField>
+
+**Configuration:**
+- Mounts at the configured `MOUNT_PATH`
+- Enables `allow_other` flag (allows all users to access)
+- On Linux, enables `nonempty` flag (allows mounting over non-empty directory)
+- Runs in foreground mode
+
+**Example:**
+
+```python
+from functions.fuseFilesystemFunctions import runFuse
+
+runFuse()  # Blocks until unmounted
+```
+
+### unmountFuse
+
+```python
+def unmountFuse()
+```
+
+Unmounts the FUSE filesystem.
+
+<ResponseField name="return" type="None">
+  Exits the process if unmounting fails.
+</ResponseField>
+
+**Example:**
+
+```python
+from functions.fuseFilesystemFunctions import unmountFuse
+
+unmountFuse()
+print("Filesystem unmounted")
+```
+
+## STRM filesystem (stremFilesystemFunctions.py)
+
+The STRM implementation creates `.strm` files that media players like Plex, Jellyfin, and Kodi can read to stream content directly.
+
+### generateFolderPath
+
+```python
+def generateFolderPath(data: dict) -> str | None
+```
+
+Generates the appropriate folder path for a download based on its metadata.
+
+<ParamField path="data" type="dict" required>
+  The download file dictionary containing metadata.
+</ParamField>
+
+<ResponseField name="return" type="str | None">
+  The relative folder path, or None if unable to generate.
+</ResponseField>
+
+**Folder structure:**
+- Movies: `{root_folder_name}/`
+- Series: `{root_folder_name}/{season_folder_name}/`
+- Raw mode: Uses original path structure
+
+**Example:**
+
+```python
+from functions.stremFilesystemFunctions import generateFolderPath
+
+movie = {
+    "metadata_mediatype": "movie",
+    "metadata_rootfoldername": "The Matrix (1999)"
+}
+path = generateFolderPath(movie)
+print(path)  # "The Matrix (1999)"
+
+series = {
+    "metadata_mediatype": "series",
+    "metadata_rootfoldername": "Breaking Bad (2008)",
+    "metadata_foldername": "Season 1"
+}
+path = generateFolderPath(series)
+print(path)  # "Breaking Bad (2008)/Season 1"
+```
+
+### generateStremFile
+
+```python
+def generateStremFile(file_path: str, url: str, type: str, file_name: str, download=None)
+```
+
+Creates a `.strm` file at the specified location containing the download URL.
+
+<ParamField path="file_path" type="str" required>
+  The relative folder path where the .strm file should be created.
+</ParamField>
+
+<ParamField path="url" type="str" required>
+  The download URL to write in the .strm file.
+</ParamField>
+
+<ParamField path="type" type="str" required>
+  The media type: "movie", "series", or "anime".
+</ParamField>
+
+<ParamField path="file_name" type="str" required>
+  The base filename (without extension).
+</ParamField>
+
+<ParamField path="download" type="dict" default="None">
+  The full download object (used in raw mode).
+</ParamField>
+
+<ResponseField name="return" type="bool">
+  True if the file was created successfully, False otherwise.
+</ResponseField>
+
+**Error handling:**
+- Returns False on FileNotFoundError (likely bad naming scheme)
+- Returns False on OSError (likely permission issues)
+- Logs all errors
+
+**Example:**
+
+```python
+from functions.stremFilesystemFunctions import generateStremFile
+
+success = generateStremFile(
+    file_path="The Matrix (1999)",
+    url="https://example.com/download/matrix.mkv",
+    type="movie",
+    file_name="The Matrix (1999)"
+)
+
+if success:
+    print("STRM file created successfully")
+```
+
+### runStrm
+
+```python
+def runStrm()
+```
+
+Creates `.strm` files for all user downloads and removes stale files for deleted downloads.
+
+<ResponseField name="return" type="None">
+  This function does not return a value.
+</ResponseField>
+
+**Process:**
+1. Fetches all current downloads from the database
+2. Gets list of existing .strm files
+3. Creates .strm files for all current downloads
+4. Removes .strm files for downloads that no longer exist
+5. Cleans up empty directories
+
+**Example:**
+
+```python
+from functions.stremFilesystemFunctions import runStrm
+
+runStrm()
+print("STRM files updated")
+```
+
+### unmountStrm
+
+```python
+def unmountStrm()
+```
+
+Deletes all .strm files and subdirectories in the mount path for cleanup.
+
+<ResponseField name="return" type="None">
+  This function does not return a value.
+</ResponseField>
+
+**Example:**
+
+```python
+from functions.stremFilesystemFunctions import unmountStrm
+
+unmountStrm()
+print("All STRM files removed")
+```
+
+## Constants
+
+### LINK_AGE (FUSE)
+
+```python
+LINK_AGE = 3 * 60 * 60  # 3 hours
+```
+
+The time in seconds that download links are cached before being refreshed. TorBox download links expire after some time, so this ensures fresh links are obtained periodically.

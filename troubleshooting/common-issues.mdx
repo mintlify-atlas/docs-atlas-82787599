@@ -1,0 +1,166 @@
+---
+title: Common issues
+description: Resolve frequently encountered problems with TorBox Media Center
+---
+
+This guide covers the most common issues you may encounter when using TorBox Media Center and their solutions.
+
+## Common problems
+
+<AccordionGroup>
+  <Accordion title="Nothing is showing up in the mounted space">
+    This can usually happen due to one of the following:
+
+    ### Processing or scraping errors
+
+    Check your logs for any errors during the processing/scraping phase where the media center attempts to get your files.
+
+    ```bash
+    docker logs torbox-media-center
+    ```
+
+    Look for error messages related to API authentication, network issues, or file processing failures.
+
+    ### Incorrect folder permissions
+
+    Make sure that Docker (or the user running Docker or the Python script) has access to the folder you have set.
+
+    **Fix using chown:**
+
+    ```bash
+    chown -R $(whoami):$(whoami) /path/to/torbox/folder
+    ```
+
+    **Fix using PUID/PGID in Docker:**
+
+    If using Docker, you can set the environmental variables `PUID` and `PGID` to the user and group that owns the folder:
+
+    ```bash
+    docker run -it -d \
+      --name=torbox-media-center \
+      -v /home/$(whoami)/torbox:/torbox \
+      -e PUID=$(id -u) \
+      -e PGID=$(id -g) \
+      -e TORBOX_API_KEY=<YOUR_KEY> \
+      -e MOUNT_PATH=/torbox \
+      anonymoussystems/torbox-media-center:latest
+    ```
+
+    ### Folder does not exist
+
+    If you aren't using Docker or the easy setup scripts, the mount folder may not exist beforehand. Create the folder first:
+
+    ```bash
+    mkdir -p /path/to/torbox/folder
+    ```
+  </Accordion>
+
+  <Accordion title="Media server cannot see the files in the mounted space">
+    When you run Plex, Jellyfin, or Emby inside a Docker container, it runs in its own isolated environment. This creates a path mapping issue where your media files might appear at `/torbox/movies` inside the TorBox Media Center container while those same files are actually located at `/home/user/torbox/movies` on your host system.
+
+    Your media server needs to access files that exist on your real computer (outside Docker), but it's running inside Docker where the file paths look different. If the permissions aren't set up correctly or the volumes aren't mapped properly, the media server won't be able to read your movie and TV show files.
+
+    ### Example configuration
+
+    If you have TorBox Media Center files stored at `/home/wamy/torbox/movies` on your computer and you map it to `/torbox/movies` inside your Docker container, Plex/Jellyfin/Emby needs to access the files at `/home/wamy/torbox/movies` **not** `/torbox/movies`.
+
+    **TorBox Media Center configuration:**
+
+    This ensures that the files will be available on the host system at `/home/wamy/torbox`:
+
+    ```bash
+    docker run -it -d \
+      --name=torbox-media-center \
+      -v /home/wamy/torbox:/torbox \
+      -e MOUNT_PATH=/torbox \
+      -e TORBOX_API_KEY=<YOUR_KEY> \
+      anonymoussystems/torbox-media-center:latest
+    ```
+
+    **Plex/Jellyfin/Emby configuration:**
+
+    This ensures that Plex/Jellyfin/Emby can see the TorBox Media Center files on the host system:
+
+    ```bash
+    docker run -d \
+      --name=jellyfin \
+      -v /home/wamy/torbox:/torbox-media-center \
+      jellyfin/jellyfin:latest
+    ```
+
+    Then inside your Plex/Jellyfin/Emby container, set the library location to:
+    - `/torbox-media-center/movies` for movies
+    - `/torbox-media-center/series` for TV shows
+
+    <Note>
+    The key is ensuring both containers have access to the same directory on the host system, even if they mount it at different paths internally.
+    </Note>
+  </Accordion>
+
+  <Accordion title="Cannot modify files inside the FUSE mount">
+    The FUSE mount is read-only by design. You cannot rename files, delete files, or move them around.
+
+    ### Why is it read-only?
+
+    This software handles file organization and management automatically based on your TorBox account. The read-only filesystem ensures that:
+
+    - Files are organized correctly according to metadata
+    - No accidental modifications break the virtual filesystem
+    - The mount stays in sync with your TorBox account
+
+    ### How to delete files
+
+    To delete a file, simply delete it from your TorBox account at [torbox.app](https://torbox.app). The file will be removed from the mount on the next refresh cycle.
+
+    ### File permissions
+
+    FUSE files are mounted with `0o444` permissions (read-only for all users), as seen in the source code:
+
+    ```python
+    st.st_mode = stat.S_IFREG | 0o444  # Read-only file
+    ```
+
+    This is intentional and cannot be changed.
+  </Accordion>
+
+  <Accordion title="Files are not updating or refreshing">
+    Files are refreshed on a schedule based on your `MOUNT_REFRESH_TIME` setting.
+
+    ### Default refresh interval
+
+    The default is `normal`, which refreshes every 3 hours. Available options:
+
+    - `slowest` - Every 24 hours
+    - `very_slow` - Every 12 hours
+    - `slow` - Every 6 hours
+    - `normal` - Every 3 hours (default)
+    - `fast` - Every 2 hours
+    - `ultra_fast` - Every 1 hour
+
+    ### Force a refresh
+
+    Restart the container to force an immediate refresh:
+
+    ```bash
+    docker restart torbox-media-center
+    ```
+
+    ### Check the logs
+
+    Monitor the logs to see when refreshes occur:
+
+    ```bash
+    docker logs -f torbox-media-center
+    ```
+
+    Look for log messages indicating file updates and mount operations.
+  </Accordion>
+</AccordionGroup>
+
+## Still having issues?
+
+If you continue to experience problems:
+
+1. Check the [Docker permissions](/troubleshooting/docker-permissions) guide for permission-related issues
+2. Review the [FUSE issues](/troubleshooting/fuse-issues) guide for FUSE-specific problems
+3. Contact support at [contact@torbox.app](mailto:contact@torbox.app) or join the [Discord server](https://join-discord.torbox.app)

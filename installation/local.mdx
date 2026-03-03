@@ -1,0 +1,276 @@
+---
+title: Local installation
+description: Install TorBox Media Center directly on your system without Docker
+---
+
+You can run TorBox Media Center directly on your system using Python, without Docker. This method gives you more control but requires manual setup.
+
+## Prerequisites
+
+- Python 3.6 or newer
+- Git (optional, for cloning the repository)
+- A TorBox account on a paid plan ([sign up here](https://torbox.app/subscription))
+- Your TorBox API key from [settings](https://torbox.app/settings)
+- Linux/Unix/BSD/MacOS for FUSE support (STRM works on all platforms including Windows)
+
+## Installation
+
+<Steps>
+  <Step title="Download the source code">
+    Clone the repository using Git:
+    ```bash
+    git clone https://github.com/TorBox-App/torbox-media-center.git
+    cd torbox-media-center
+    ```
+
+    Or download the ZIP file from [GitHub](https://github.com/TorBox-App/torbox-media-center/archive/refs/heads/main.zip) and extract it:
+    ```bash
+    unzip torbox-media-center-main.zip
+    cd torbox-media-center-main
+    ```
+  </Step>
+
+  <Step title="Create environment file">
+    Create a `.env` file for your configuration:
+    ```bash
+    cp .env.example .env
+    ```
+
+    Or create a new `.env` file manually:
+    ```bash
+    touch .env
+    ```
+  </Step>
+
+  <Step title="Configure environment variables">
+    Edit the `.env` file and add your configuration:
+    ```bash
+    TORBOX_API_KEY=your_api_key_here
+    MOUNT_METHOD=strm
+    MOUNT_PATH=/home/yourusername/torbox
+    MOUNT_REFRESH_TIME=normal
+    ENABLE_METADATA=false
+    RAW_MODE=false
+    ```
+
+    <Note>
+      - Replace `your_api_key_here` with your actual API key from [torbox.app/settings](https://torbox.app/settings)
+      - Set `MOUNT_PATH` to an existing directory where you want your media accessible
+      - Choose `strm` or `fuse` for `MOUNT_METHOD`
+    </Note>
+  </Step>
+
+  <Step title="Install Python dependencies">
+    Install all required packages from `requirements.txt`:
+    ```bash
+    pip3 install -r requirements.txt
+    ```
+
+    This will install:
+    - `apscheduler` - Task scheduling
+    - `tinydb` - Lightweight database
+    - `httpx` - HTTP client
+    - `python-dotenv` - Environment variable management
+    - `parse-torrent-title` - Media metadata parsing
+    - `fuse-python` - FUSE filesystem support (Linux only)
+    - `GitPython` - Git operations
+
+    <Warning>
+      On Windows, FUSE support is not available. Use `MOUNT_METHOD=strm` instead.
+    </Warning>
+
+    <Note>
+      On macOS, FUSE requires [macFUSE](https://macfuse.github.io/) to be installed separately.
+    </Note>
+  </Step>
+
+  <Step title="Create mount directory">
+    Ensure the mount path exists and is accessible:
+    ```bash
+    mkdir -p ~/torbox
+    ```
+
+    Make sure the user running the script has write permissions:
+    ```bash
+    chmod 755 ~/torbox
+    ```
+  </Step>
+
+  <Step title="Run the application">
+    Start TorBox Media Center:
+    ```bash
+    python3 main.py
+    ```
+
+    The application will:
+    - Validate your API key
+    - Connect to TorBox services
+    - Begin syncing your media files
+    - Keep running in the foreground
+
+    <Note>
+      Keep the terminal window open. Closing it will stop the application.
+    </Note>
+  </Step>
+</Steps>
+
+## Running in the background
+
+To keep TorBox Media Center running after closing your terminal:
+
+### Using nohup
+
+```bash
+nohup python3 main.py &
+```
+
+### Using screen
+
+```bash
+screen -S torbox
+python3 main.py
+# Press Ctrl+A then D to detach
+```
+
+Reattach with:
+```bash
+screen -r torbox
+```
+
+### Using systemd (Linux)
+
+Create a systemd service file:
+
+```bash /etc/systemd/system/torbox-media-center.service
+[Unit]
+Description=TorBox Media Center
+After=network.target
+
+[Service]
+Type=simple
+User=yourusername
+WorkingDirectory=/path/to/torbox-media-center
+ExecStart=/usr/bin/python3 /path/to/torbox-media-center/main.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable and start the service:
+```bash
+sudo systemctl enable torbox-media-center
+sudo systemctl start torbox-media-center
+```
+
+Check status:
+```bash
+sudo systemctl status torbox-media-center
+```
+
+## Environment variables reference
+
+Required:
+- `TORBOX_API_KEY` - Your TorBox API key from [torbox.app/settings](https://torbox.app/settings)
+
+Optional:
+- `MOUNT_METHOD` - Either `strm` or `fuse` (default: `strm`)
+- `MOUNT_PATH` - Directory where media files will be accessible (must exist)
+- `MOUNT_REFRESH_TIME` - Sync frequency: `slowest`, `very_slow`, `slow`, `normal`, `fast`, `ultra_fast`, or `instant` (default: `normal`)
+- `ENABLE_METADATA` - Enable automatic organization into movies/series folders (default: `false`)
+- `RAW_MODE` - Use original file structure without organization (default: `false`)
+
+## Updating
+
+To update to the latest version:
+
+<Steps>
+  <Step title="Stop the application">
+    If running in the foreground, press `Ctrl+C`. If using systemd:
+    ```bash
+    sudo systemctl stop torbox-media-center
+    ```
+  </Step>
+
+  <Step title="Pull latest changes">
+    ```bash
+    git pull origin main
+    ```
+
+    Or download the latest ZIP and extract it.
+  </Step>
+
+  <Step title="Update dependencies">
+    ```bash
+    pip3 install -r requirements.txt --upgrade
+    ```
+  </Step>
+
+  <Step title="Restart the application">
+    ```bash
+    python3 main.py
+    ```
+
+    Or if using systemd:
+    ```bash
+    sudo systemctl start torbox-media-center
+    ```
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+### Python version issues
+
+Check your Python version:
+```bash
+python3 --version
+```
+
+If it's below 3.6, upgrade Python or use [pyenv](https://github.com/pyenv/pyenv) to manage multiple versions.
+
+### Permission errors
+
+Ensure the mount path exists and is writable:
+```bash
+mkdir -p ~/torbox
+chmod 755 ~/torbox
+```
+
+### FUSE errors on Linux
+
+Install FUSE development libraries:
+
+```bash Ubuntu/Debian
+sudo apt-get install libfuse-dev fuse
+```
+
+```bash Fedora/CentOS
+sudo dnf install fuse-devel fuse
+```
+
+### Missing dependencies
+
+If `pip3 install` fails, you may need development tools:
+
+```bash Ubuntu/Debian
+sudo apt-get install python3-dev build-essential
+```
+
+```bash macOS
+xcode-select --install
+```
+
+## Next steps
+
+After installation:
+
+1. Your media files will appear at the `MOUNT_PATH` you configured
+2. Configure your media server to use:
+   - Movies: `<MOUNT_PATH>/movies`
+   - TV Shows: `<MOUNT_PATH>/series`
+3. Check the application logs for any errors
+
+<Note>
+See the [Configuration](/configuration) guide for advanced settings and the [Troubleshooting](/troubleshooting) guide if you encounter issues.
+</Note>

@@ -1,0 +1,141 @@
+---
+title: Jellyfin and Emby setup
+description: Set up TorBox Media Center with Jellyfin or Emby using STRM files
+---
+
+Jellyfin and Emby both support `.strm` files, which are small text files that point to streaming URLs. This is the recommended method for these media servers as it's compatible with all systems and takes up minimal storage space (less than 1GB for libraries of any size).
+
+## Why use STRM for Jellyfin and Emby?
+
+The STRM mounting method is specifically geared towards media servers that support `.strm` files. Benefits include:
+
+- **Universal compatibility** - Works on all operating systems, including Windows
+- **Minimal storage** - STRM files are tiny text files, using less than 1GB total
+- **No FUSE required** - Doesn't require Linux kernel FUSE support
+- **Better compatibility** - Jellyfin and Emby have excellent STRM support
+
+<Tip>
+For Jellyfin and Emby, always use `MOUNT_METHOD=strm`
+</Tip>
+
+## Setup steps
+
+<Steps>
+  <Step title="Configure TorBox Media Center for STRM">
+    Set the `MOUNT_METHOD` environment variable to `strm`:
+
+    ```bash
+    docker run -it -d \
+        --name=torbox-media-center \
+        --restart=always \
+        --init \
+        -v /home/$(whoami)/torbox:/torbox \
+        -e TORBOX_API_KEY=<YOUR_API_KEY> \
+        -e MOUNT_METHOD=strm \
+        -e MOUNT_PATH=/torbox \
+        anonymoussystems/torbox-media-center:latest
+    ```
+
+    Or with Docker Compose:
+
+    ```yaml
+    name: torbox-media-center
+    services:
+        torbox-media-center:
+            container_name: torbox-media-center
+            stdin_open: true
+            tty: true
+            restart: always
+            volumes:
+                - /home/$(whoami)/torbox:/torbox
+            environment:
+                - TORBOX_API_KEY=<YOUR_API_KEY>
+                - MOUNT_METHOD=strm
+                - MOUNT_PATH=/torbox
+            image: anonymoussystems/torbox-media-center:latest
+    ```
+  </Step>
+
+  <Step title="Configure Jellyfin or Emby volume mapping">
+    Add the TorBox Media Center path to your Jellyfin or Emby container. Use the **host system path**, not the container path:
+
+    ```bash
+    -v /home/$(whoami)/torbox:/torbox-media-center
+    ```
+
+    This makes the files available inside your Jellyfin/Emby container at `/torbox-media-center`.
+  </Step>
+
+  <Step title="Add libraries in Jellyfin or Emby">
+    In your Jellyfin or Emby web interface:
+
+    1. Navigate to Dashboard > Libraries
+    2. Click "Add Media Library"
+    3. For Movies:
+       - Content type: Movies
+       - Folder: `/torbox-media-center/movies`
+    4. Click "Add Media Library" again
+    5. For TV Shows:
+       - Content type: Shows
+       - Folder: `/torbox-media-center/series`
+    6. Save and scan libraries
+  </Step>
+
+  <Step title="Configure library scanning">
+    Set your library to scan for new content regularly:
+
+    - Go to Dashboard > Scheduled Tasks
+    - Configure "Scan Media Library" to run on your preferred schedule
+    - This should align with your `MOUNT_REFRESH_TIME` setting
+  </Step>
+</Steps>
+
+## Understanding STRM files
+
+A `.strm` file is a plain text file containing a URL that points to your media. When you play a file in Jellyfin or Emby, it reads the URL from the STRM file and streams directly from TorBox.
+
+**Example STRM file content:**
+```
+https://api.torbox.app/v1/api/torrents/requestdl?token=YOUR_TOKEN&torrent_id=12345&file_id=67890&redirect=true
+```
+
+These files:
+- Take up less than 1KB each
+- Are created automatically by TorBox Media Center
+- Are updated when your library refreshes
+- Point directly to TorBox's streaming URLs
+
+## Performance considerations
+
+The STRM method has some disk I/O overhead:
+
+- Files are created and updated on disk during library refreshes
+- Over long periods, this can cause disk wear (minimal, but worth noting)
+- On slow filesystems (HDD vs SSD), many files can slow down initial scanning
+
+<Warning>
+If you have a very slow hard drive and an extremely large library (10,000+ files), initial library scans may take longer than with the FUSE method.
+</Warning>
+
+## Troubleshooting
+
+### STRM files aren't playing
+
+Check that:
+1. Your TorBox API key is valid
+2. The files are cached in your TorBox account
+3. Jellyfin/Emby has network access to TorBox's API
+
+### Libraries aren't updating
+
+Verify:
+1. TorBox Media Center is running and refreshing (check logs)
+2. Your `MOUNT_REFRESH_TIME` is set appropriately
+3. Jellyfin/Emby scheduled tasks are configured to scan libraries
+
+### Permission errors
+
+Ensure:
+1. The volume mapping uses the correct host path
+2. The user running Jellyfin/Emby has read permissions on the mount path
+3. Set `PUID` and `PGID` environment variables if needed

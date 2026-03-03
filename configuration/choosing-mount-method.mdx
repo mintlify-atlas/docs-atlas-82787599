@@ -1,0 +1,255 @@
+---
+title: Choosing a mount method
+description: Decision guide for selecting between STRM and FUSE
+---
+
+Choosing the right mount method depends on your operating system, media server, use case, and storage constraints. This guide will help you make the best choice.
+
+## Quick recommendation
+
+<CardGroup cols={2}>
+  <Card title="Use STRM if..." icon="file-lines">
+    - You're using Jellyfin or Emby
+    - You want maximum compatibility
+    - You're on Windows
+    - You're unsure which to choose
+  </Card>
+  
+  <Card title="Use FUSE if..." icon="folder-tree">
+    - You're using Plex, VLC, or Infuse
+    - You have limited storage space
+    - Your media server doesn't support `.strm` files
+    - You're on Linux or macOS
+  </Card>
+</CardGroup>
+
+<Note>
+  If you're unsure, choose **STRM**. It works on all systems and with most media servers.
+</Note>
+
+## Comparison table
+
+| Feature | STRM | FUSE |
+|---------|------|------|
+| **OS compatibility** | All (Windows, Linux, macOS, BSD) | Linux, macOS, BSD only |
+| **Storage required** | < 1GB for any library size | 0 bytes (virtual files only) |
+| **Disk writes** | Yes (creates `.strm` files) | No (virtual filesystem) |
+| **Performance** | Fast file listing | Slower file listing |
+| **Resource usage** | Low CPU/memory | Higher CPU/memory |
+| **Docker complexity** | Simple (no special config) | Complex (requires privileges) |
+| **Jellyfin support** | Excellent (native `.strm`) | Good (works as files) |
+| **Emby support** | Excellent (native `.strm`) | Good (works as files) |
+| **Plex support** | Limited (poor `.strm` support) | Excellent (native files) |
+| **VLC support** | No (can't read `.strm`) | Excellent (native files) |
+| **Infuse support** | No (can't read `.strm`) | Excellent (native files) |
+| **Debugging** | Easy (files are visible) | Harder (virtual filesystem) |
+| **Read/write** | Read-only `.strm` files | Read-only virtual files |
+
+## Media server compatibility
+
+### Jellyfin
+
+**Recommended: STRM**
+
+Jellyfin has excellent native support for `.strm` files. It can:
+- Automatically detect and scan `.strm` files
+- Extract metadata from filenames
+- Stream content directly from URLs
+- Display proper media information
+
+FUSE will also work, but STRM is the optimal choice for Jellyfin.
+
+### Emby
+
+**Recommended: STRM**
+
+Emby, like Jellyfin, has excellent `.strm` file support:
+- Native `.strm` file recognition
+- Automatic metadata extraction
+- Seamless streaming experience
+
+FUSE will also work, but STRM is preferred.
+
+### Plex
+
+**Recommended: FUSE**
+
+Plex has poor support for `.strm` files:
+- Limited or no `.strm` file recognition
+- May not properly index `.strm` libraries
+- Inconsistent playback behavior
+
+FUSE is the better choice as Plex treats the virtual files as regular media files.
+
+### VLC, Infuse, and other players
+
+**Recommended: FUSE**
+
+Most standalone media players cannot read `.strm` files:
+- VLC doesn't understand `.strm` format
+- Infuse ignores `.strm` files
+- Other players expect actual media files
+
+FUSE creates a virtual filesystem that appears as regular files to these players.
+
+## Operating system compatibility
+
+### Windows
+
+**Only option: STRM**
+
+FUSE is not supported on Windows. The application will error and refuse to run if you select FUSE on Windows.
+
+```bash
+Error: The FUSE mount method is not supported on Windows. 
+Please use the STRM mount method or run this application on a Linux system.
+```
+
+### Linux
+
+**Both methods supported**
+
+Linux has native FUSE support built into the kernel, so both methods work perfectly:
+- STRM: Works without any additional setup
+- FUSE: Works out of the box (FUSE already installed)
+
+### macOS
+
+**Both methods supported (with macFUSE)**
+
+macOS requires [macFUSE](https://macfuse.github.io/) for FUSE support:
+- STRM: Works without any additional setup
+- FUSE: Requires installing macFUSE first
+
+### BSD
+
+**Both methods supported**
+
+BSD systems typically include FUSE support:
+- STRM: Works without any additional setup
+- FUSE: Works if FUSE kernel module is available
+
+## Use case considerations
+
+### Limited storage space
+
+**Choose: FUSE**
+
+If you're running on a device with limited storage (like a Raspberry Pi with a small SD card):
+- FUSE uses 0 bytes for file storage
+- Only cache data is stored (configurable, default 4GB max)
+- No disk writes for file creation
+
+### Slow hard drive or SD card
+
+**Choose: FUSE**
+
+If your storage is slow or you want to minimize disk wear:
+- STRM writes files frequently (every 5 minutes plus full refresh cycles)
+- FUSE only writes to cache, reducing disk I/O
+- Better for SD cards and aging HDDs
+
+### Large libraries (100,000+ files)
+
+**Choose: FUSE**
+
+For very large libraries:
+- STRM must create thousands of physical files
+- File creation time increases with library size
+- FUSE creates a virtual filesystem instantly
+
+### Maximum compatibility needed
+
+**Choose: STRM**
+
+If you need to support multiple operating systems or aren't sure about your setup:
+- STRM works everywhere
+- Easier to debug and troubleshoot
+- Simpler Docker configuration
+
+### Docker environment with restrictions
+
+**Choose: STRM**
+
+Some Docker environments (shared hosting, managed containers) may not allow:
+- Device access (`/dev/fuse`)
+- Elevated capabilities (`SYS_ADMIN`)
+- Custom security options
+
+STRM works in any Docker environment without special permissions.
+
+## Performance considerations
+
+### File listing and browsing
+
+**STRM is faster**
+
+When browsing libraries in your media server:
+- STRM: Fast directory listing (physical files)
+- FUSE: Slower (filesystem emulation overhead)
+
+For large libraries, this difference is noticeable.
+
+### Media playback
+
+**Both are similar**
+
+Once playback starts:
+- STRM: Media server streams directly from URL
+- FUSE: Application streams and caches data
+
+Both methods stream from TorBox servers with similar performance.
+
+### System resources
+
+**STRM uses fewer resources**
+
+- STRM: Low CPU and memory usage (simple file operations)
+- FUSE: Higher CPU and memory (filesystem emulation + caching)
+
+On low-powered devices (Raspberry Pi), STRM may be more suitable.
+
+## Decision flowchart
+
+```
+Are you on Windows?
+├─ Yes → Use STRM (only option)
+└─ No → Continue
+
+Are you using Jellyfin or Emby?
+├─ Yes → Use STRM (recommended)
+└─ No → Continue
+
+Are you using Plex, VLC, Infuse, or another player?
+├─ Yes → Use FUSE (recommended)
+└─ No → Continue
+
+Do you have limited storage space?
+├─ Yes → Use FUSE
+└─ No → Continue
+
+Are you running in a restricted Docker environment?
+├─ Yes → Use STRM
+└─ No → Either works, choose STRM for simplicity
+```
+
+## Switching methods later
+
+You're not locked into your choice. You can switch between STRM and FUSE at any time:
+
+1. Stop TorBox Media Center
+2. Change `MOUNT_METHOD` environment variable
+3. Restart the application
+4. The mount path is automatically cleared and recreated
+
+See [Mount methods](/configuration/mount-methods) for technical details about switching.
+
+## Still unsure?
+
+If you're still not sure which method to choose:
+
+1. **Start with STRM** - it works everywhere and is easier to troubleshoot
+2. **Try it out** - see if your media server works well with `.strm` files
+3. **Switch if needed** - if you encounter issues, try FUSE
+
+Most users find that STRM is the right choice, especially with Jellyfin or Emby.

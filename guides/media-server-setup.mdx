@@ -1,0 +1,102 @@
+---
+title: Media server setup
+description: Configure your media server to work with TorBox Media Center
+---
+
+TorBox Media Center organizes your TorBox media files so they can be easily discovered by media servers like Jellyfin, Emby, and Plex. This guide covers the general setup process for any media server.
+
+## Understanding Docker volume mapping
+
+When you run TorBox Media Center inside a Docker container, it creates files in an isolated environment. Your media server needs to access those same files on your host system.
+
+### How volume mapping works
+
+Docker volume mapping creates a bridge between paths inside the container and paths on your host system. The files appear at one path inside Docker and a different path on your actual computer.
+
+**Example configuration:**
+
+If you have TorBox Media Center files stored at `/home/wamy/torbox/movies` on your computer and you map it to `/torbox/movies` inside your Docker container, your media server needs to access the files at `/home/wamy/torbox/movies` **not** `/torbox/movies`.
+
+### TorBox Media Center configuration
+
+This ensures that the files will be available on the host system at `/home/wamy/torbox`:
+
+```bash
+-v /home/wamy/torbox:/torbox
+-e MOUNT_PATH=/torbox
+```
+
+### Media server configuration
+
+This ensures that your media server can see the TorBox Media Center files on the host system:
+
+```bash
+-v /home/wamy/torbox:/torbox-media-center
+```
+
+Then inside your media server container, set the library location to:
+- `/torbox-media-center/movies` for movies
+- `/torbox-media-center/series` for TV shows
+
+## File structure
+
+TorBox Media Center organizes files into two main folders (unless RAW_MODE is enabled):
+
+- **movies/** - Contains all movie files
+- **series/** - Contains all TV show files organized by season
+
+When metadata scanning is enabled, files are automatically organized:
+- Movies: `Title (Year).ext`
+- Series: `Title/Season N/Title S01E01.ext`
+
+When metadata scanning is disabled, all video files are placed in the `movies` folder.
+
+## Common issues
+
+### Nothing showing up in the mounted space
+
+This can happen due to:
+
+1. **Processing errors** - Check your logs for any errors during the scraping phase where TorBox Media Center attempts to get your files.
+
+2. **Incorrect folder permissions** - Make sure that Docker (or the user running Docker or the Python script) has access to the folder you have set.
+   - Use the `chown` command to change the permissions
+   - If using Docker, set the `PUID` and `PGID` environment variables to the user and group that owns the folder
+
+3. **Folder doesn't exist** - If you aren't using Docker or the easy setup scripts, the folder won't exist beforehand. Create it manually.
+
+### Media server cannot see the files
+
+When you run your media server inside a Docker container, it's running in its own isolated world. This creates a path mapping issue:
+
+- Your media files might appear at `/torbox/movies` inside Docker
+- Those same files are actually located at `/home/user/torbox/movies` on your computer
+- Your media server needs to access files on your real computer (outside Docker)
+- If permissions aren't set up correctly, the media server won't be able to read your files
+
+<Tip>
+Always use the **host system path** when configuring your media server's library locations, not the Docker container path.
+</Tip>
+
+## Library setup
+
+After configuring volume mapping:
+
+1. Open your media server's web interface
+2. Navigate to library settings
+3. Add a new library for Movies pointing to the `movies` folder
+4. Add a new library for TV Shows pointing to the `series` folder
+5. Configure your media server to scan for new content
+
+<Note>
+The specific steps vary by media server. See the [Jellyfin and Emby](/guides/jellyfin-emby) or [Plex](/guides/plex) guides for platform-specific instructions.
+</Note>
+
+## Choosing a mounting method
+
+TorBox Media Center supports two mounting methods:
+
+- **STRM** - Recommended for Jellyfin and Emby. Creates small text files that point to your media.
+- **FUSE** - Recommended for Plex and other players. Mounts files as a virtual filesystem.
+
+See the [Jellyfin and Emby](/guides/jellyfin-emby) guide for STRM setup or the [Plex](/guides/plex) guide for FUSE setup.

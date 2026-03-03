@@ -1,0 +1,356 @@
+---
+title: Automated setup scripts
+description: Use one-command setup scripts for quick Docker installation on Linux, macOS, and Windows
+---
+
+TorBox Media Center provides automated setup scripts that handle the entire Docker installation process. These scripts are perfect if you're not familiar with Docker or want a guided setup experience.
+
+## Overview
+
+The setup scripts will:
+- Prompt you for your TorBox API key
+- Ask which mount method you prefer (STRM or FUSE)
+- Let you choose where to store your media files
+- Verify Docker is installed and running
+- Check for FUSE support (if needed)
+- Create necessary directories
+- Run the Docker container with proper configuration
+- Display helpful commands for managing the container
+
+## Supported platforms
+
+<CardGroup cols={3}>
+  <Card title="Linux" icon="linux">
+    `setup-linux.sh`
+
+    Works on all Linux distributions with Bash
+  </Card>
+  <Card title="macOS" icon="apple">
+    `setup-macos.sh`
+
+    Works on macOS with Docker Desktop
+  </Card>
+  <Card title="Windows" icon="windows">
+    `setup-windows.bat`
+
+    Works on Windows with Docker Desktop or WSL2
+  </Card>
+</CardGroup>
+
+## Prerequisites
+
+- Docker installed and running on your system
+- A TorBox account on a paid plan
+- Your TorBox API key from [torbox.app/settings](https://torbox.app/settings)
+- Administrator/sudo access (required for Docker operations)
+
+## Linux setup
+
+<Steps>
+  <Step title="Download the script">
+    ```bash
+    curl -O https://raw.githubusercontent.com/TorBox-App/torbox-media-center/main/scripts/setup-linux.sh
+    ```
+
+    Or download it directly from [GitHub](https://github.com/TorBox-App/torbox-media-center/blob/main/scripts/setup-linux.sh).
+  </Step>
+
+  <Step title="Make it executable">
+    ```bash
+    chmod +x setup-linux.sh
+    ```
+  </Step>
+
+  <Step title="Run the script">
+    ```bash
+    ./setup-linux.sh
+    ```
+
+    The script will prompt you for:
+    - Your TorBox API key
+    - Mount method (fuse or strm)
+    - Storage path (default: `/home/yourusername/torbox-media-center`)
+  </Step>
+</Steps>
+
+### What the script does
+
+1. **Validates API key** - Ensures you've entered a key
+2. **Checks mount method** - Verifies you chose `fuse` or `strm`
+3. **Sets storage path** - Uses default or your custom path
+4. **Verifies Docker** - Checks if Docker is installed and running
+5. **Checks FUSE** (if needed) - Verifies FUSE is available for FUSE mount method
+6. **Creates directory** - Makes the storage path if it doesn't exist
+7. **Runs container** - Executes the appropriate Docker command
+8. **Shows management commands** - Displays helpful commands for logs, restart, stop, and remove
+
+### Script output example
+
+```bash
+=== TorBox Media Center is now running! ===
+
+--- Mount Path: /home/yourusername/torbox-media-center ---
+--- Run as: strm ---
+--- API Key: your_key_here ---
+-- To view logs run: sudo docker logs -f torbox-media-center
+-- To restart the container run: sudo docker restart torbox-media-center
+-- To stop the container run: sudo docker stop torbox-media-center
+-- To remove the container run: sudo docker rm torbox-media-center
+```
+
+## macOS setup
+
+<Steps>
+  <Step title="Download the script">
+    ```bash
+    curl -O https://raw.githubusercontent.com/TorBox-App/torbox-media-center/main/scripts/setup-macos.sh
+    ```
+  </Step>
+
+  <Step title="Make it executable">
+    ```bash
+    chmod +x setup-macos.sh
+    ```
+  </Step>
+
+  <Step title="Run the script">
+    ```bash
+    ./setup-macos.sh
+    ```
+
+    Default storage path: `/Users/yourusername/torbox-media-center`
+  </Step>
+</Steps>
+
+<Note>
+  For FUSE support on macOS, you need to install [macFUSE](https://macfuse.github.io/) first.
+</Note>
+
+### macOS-specific differences
+
+- Uses `/Users/` instead of `/home/` for default path
+- Uses `id -un` instead of `whoami` for username detection
+- Same Docker configuration as Linux
+
+## Windows setup
+
+<Steps>
+  <Step title="Download the script">
+    Download `setup-windows.bat` from [GitHub](https://github.com/TorBox-App/torbox-media-center/blob/main/scripts/setup-windows.bat).
+  </Step>
+
+  <Step title="Run as administrator">
+    Right-click `setup-windows.bat` and select "Run as administrator".
+
+    The script will prompt you for:
+    - Your TorBox API key
+    - Mount method (fuse or strm)
+    - Storage path (default: `C:\Users\yourusername\torbox-media-center`)
+  </Step>
+</Steps>
+
+<Warning>
+  For FUSE on Windows, you need WSL2 with FUSE installed. The script will check for FUSE in WSL. We recommend using STRM method on Windows for simplicity.
+</Warning>
+
+### Windows-specific behavior
+
+- Stops and removes existing container before creating a new one
+- Checks for FUSE in WSL2 environment if using FUSE method
+- Uses Windows path format (`C:\Users\...`)
+- No sudo required (uses administrator permissions)
+
+## Configuration options
+
+### Mount method choice
+
+When prompted to choose between FUSE and STRM:
+
+- **STRM** - Recommended for:
+  - Jellyfin and Emby users
+  - Windows users
+  - Simpler setup without special permissions
+
+- **FUSE** - Recommended for:
+  - Plex users
+  - VLC, Infuse, and other direct file access
+  - Advanced users comfortable with system-level permissions
+
+### Custom storage path
+
+You can specify any path where you want your media files:
+
+```bash Linux/macOS
+/mnt/media/torbox
+/data/torbox
+~/Movies/torbox
+```
+
+```cmd Windows
+D:\Media\torbox
+C:\Data\torbox
+```
+
+<Note>
+  The script will create the directory if it doesn't exist.
+</Note>
+
+## After installation
+
+Once the script completes, you can:
+
+### View logs
+
+```bash Linux/macOS
+sudo docker logs -f torbox-media-center
+```
+
+```cmd Windows
+docker logs -f torbox-media-center
+```
+
+### Restart container
+
+```bash Linux/macOS
+sudo docker restart torbox-media-center
+```
+
+```cmd Windows
+docker restart torbox-media-center
+```
+
+### Stop container
+
+```bash Linux/macOS
+sudo docker stop torbox-media-center
+```
+
+```cmd Windows
+docker stop torbox-media-center
+```
+
+### Remove container
+
+```bash Linux/macOS
+sudo docker rm torbox-media-center
+```
+
+```cmd Windows
+docker rm torbox-media-center
+```
+
+## Troubleshooting
+
+### Docker not installed
+
+If the script reports Docker isn't installed:
+
+<Tabs>
+  <Tab title="Linux">
+    Install Docker using your distribution's package manager or follow the [official guide](https://docs.docker.com/engine/install/).
+
+    ```bash Ubuntu/Debian
+    sudo apt-get update
+    sudo apt-get install docker.io
+    sudo systemctl start docker
+    ```
+  </Tab>
+  <Tab title="macOS">
+    Install [Docker Desktop for Mac](https://docs.docker.com/desktop/install/mac-install/) and ensure it's running.
+  </Tab>
+  <Tab title="Windows">
+    Install [Docker Desktop for Windows](https://docs.docker.com/desktop/install/windows-install/) and ensure it's running.
+  </Tab>
+</Tabs>
+
+### Docker not running
+
+If Docker is installed but not running:
+
+```bash Linux
+sudo systemctl start docker
+```
+
+```bash macOS/Windows
+Start Docker Desktop from Applications
+```
+
+### FUSE not available
+
+If you chose FUSE but it's not available:
+
+<Tabs>
+  <Tab title="Linux">
+    Install FUSE:
+    ```bash Ubuntu/Debian
+    sudo apt-get install fuse
+    ```
+
+    ```bash Fedora/CentOS
+    sudo dnf install fuse
+    ```
+  </Tab>
+  <Tab title="macOS">
+    Install [macFUSE](https://macfuse.github.io/):
+    ```bash
+    brew install --cask macfuse
+    ```
+  </Tab>
+  <Tab title="Windows">
+    Install FUSE in WSL2 or use STRM method instead:
+    ```bash In WSL2
+    sudo apt-get install fuse
+    ```
+  </Tab>
+</Tabs>
+
+### Permission denied errors
+
+If you get permission errors:
+
+```bash Linux/macOS
+# Run with sudo
+sudo ./setup-linux.sh
+```
+
+```cmd Windows
+Right-click and "Run as administrator"
+```
+
+### Container already exists
+
+If a container named `torbox-media-center` already exists:
+
+```bash
+# Stop and remove it
+sudo docker stop torbox-media-center
+sudo docker rm torbox-media-center
+# Then run the script again
+```
+
+The Windows script automatically handles this.
+
+## Manual configuration
+
+If you prefer to configure options without running the script interactively, you can:
+
+1. View the script source code on [GitHub](https://github.com/TorBox-App/torbox-media-center/tree/main/scripts)
+2. Copy the Docker run command from the script
+3. Modify the environment variables and volume mounts
+4. Run the Docker command directly
+
+See the [Docker installation](/installation/docker) guide for manual Docker setup.
+
+## Next steps
+
+After running the setup script:
+
+1. Check the container logs to ensure it's running correctly
+2. Your media files will appear at the storage path you specified
+3. Configure your media server to use:
+   - Movies: `<storage_path>/movies`
+   - TV Shows: `<storage_path>/series`
+
+<Note>
+See the [Configuration](/configuration) guide for advanced settings and environment variables.
+</Note>

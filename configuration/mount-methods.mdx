@@ -1,0 +1,178 @@
+---
+title: Mount methods
+description: Understanding STRM and FUSE mounting methods
+---
+
+TorBox Media Center offers two different mounting methods: STRM and FUSE. Each method has different technical characteristics, performance profiles, and use cases.
+
+## STRM mounting method
+
+The STRM method creates `.strm` text files on your filesystem that contain URLs pointing to your media files.
+
+### How it works
+
+When you use the STRM mount method (mount-methods.mdx:18):
+
+1. The application fetches your downloads from TorBox
+2. For each video file, it creates a `.strm` text file in your `MOUNT_PATH`
+3. Each `.strm` file contains a single line: the direct download URL for that video
+4. Media servers like Jellyfin and Emby can read these `.strm` files and stream the content directly
+5. Files are organized into `movies` and `series` folders (unless `RAW_MODE` is enabled)
+6. The application runs on a scheduled interval (every 5 minutes) to create, update, or remove `.strm` files
+
+### Technical details
+
+- **File size**: Each `.strm` file is typically less than 200 bytes (just a text file with a URL)
+- **Storage**: An entire library of thousands of files uses less than 1GB of storage
+- **Updates**: Files are refreshed every 5 minutes, with full library scans based on `MOUNT_REFRESH_TIME`
+- **File structure**: Physical files and folders created on disk at `MOUNT_PATH`
+- **Implementation**: Uses standard filesystem operations (main.py:42-49, stremFilesystemFunctions.py:76-114)
+
+### Performance characteristics
+
+**Advantages:**
+- Minimal storage usage (< 1GB for any library size)
+- Simple and reliable
+- Fast file listing and directory traversal
+- No filesystem emulation overhead
+- Works on any operating system
+- Easy to debug (files are visible and readable)
+
+**Considerations:**
+- Creates physical files that require disk I/O
+- Frequent updates can cause disk wear on slow storage (HDDs)
+- Multiple write operations during library updates
+- Relies on media server support for `.strm` files
+
+### Storage requirements
+
+For a typical library:
+- 1,000 files ≈ 200 KB
+- 10,000 files ≈ 2 MB
+- 100,000 files ≈ 20 MB
+
+The actual storage used is negligible compared to the media content itself.
+
+## FUSE mounting method
+
+The FUSE (Filesystem in Userspace) method creates a virtual filesystem that presents your TorBox media as if it were stored locally.
+
+### How it works
+
+When you use the FUSE mount method (mount-methods.mdx:18):
+
+1. The application creates a virtual filesystem at your `MOUNT_PATH`
+2. Files appear in the filesystem with correct names and sizes, but no data is stored locally
+3. When a media player tries to read a file, FUSE intercepts the request
+4. The application streams the requested data directly from TorBox servers
+5. Downloaded data is cached in 64MB blocks (up to 4GB total cache)
+6. The virtual filesystem updates every 5 minutes with new files from your TorBox account
+
+### Technical details
+
+- **File size**: Zero bytes stored locally (virtual files only)
+- **Storage**: Only cache data (configurable, default 4GB max)
+- **Block size**: 64MB chunks for efficient streaming (fuseFilesystemFunctions.py:148)
+- **Cache**: LRU (Least Recently Used) cache eviction strategy
+- **Link caching**: Download URLs are cached for 3 hours to reduce API calls (fuseFilesystemFunctions.py:26)
+- **Permissions**: Read-only filesystem (0o444 for files, 0o755 for directories)
+- **Implementation**: Uses Python fuse library (fuseFilesystemFunctions.py:135-301)
+
+### Performance characteristics
+
+**Advantages:**
+- Zero storage space required (virtual files)
+- No disk writes for file creation
+- Works with any media player or application
+- Direct streaming from TorBox servers
+- Intelligent block-level caching
+
+**Considerations:**
+- Slower file listing and directory operations (filesystem emulation overhead)
+- Higher CPU and memory usage
+- May have compatibility issues with some Docker configurations
+- Initial file access may be slower (cold cache)
+- Read-only filesystem (cannot modify or delete files from the mount)
+
+### Caching strategy
+
+The FUSE implementation uses a sophisticated caching system:
+
+- Files are downloaded in 64MB blocks on-demand
+- Up to 64 blocks can be cached (4GB total)
+- When cache is full, oldest blocks are evicted (LRU)
+- Download links are cached for 3 hours to avoid API spam
+- Cache is maintained per-file, per-block for efficient seeking
+
+## Operating system compatibility
+
+### STRM method
+
+- **Linux**: Full support
+- **macOS**: Full support
+- **Windows**: Full support
+- **BSD**: Full support
+
+**Compatibility**: Universal - works on all operating systems.
+
+### FUSE method
+
+- **Linux**: Full support (FUSE built into kernel)
+- **macOS**: Supported via [macFUSE](https://macfuse.github.io/)
+- **Windows**: Not supported (main.py:22-24)
+- **BSD**: Supported (FUSE available)
+
+**Compatibility**: Limited to Unix-like systems with FUSE support.
+
+<Warning>
+  The application will error and refuse to run if you select FUSE on an incompatible system (like Windows).
+</Warning>
+
+## Docker considerations
+
+### STRM in Docker
+
+```yaml
+services:
+  torbox-media-center:
+    volumes:
+      - /home/user/torbox:/torbox
+    environment:
+      - MOUNT_METHOD=strm
+      - MOUNT_PATH=/torbox
+```
+
+No special Docker configuration needed.
+
+### FUSE in Docker
+
+```yaml
+services:
+  torbox-media-center:
+    volumes:
+      - /home/user/torbox:/torbox
+    devices:
+      - /dev/fuse:/dev/fuse  # Required
+    environment:
+      - MOUNT_METHOD=fuse
+      - MOUNT_PATH=/torbox
+    cap_add:
+      - SYS_ADMIN  # Required for mounting
+    security_opt:
+      - apparmor:unconfined  # May be required
+```
+
+FUSE requires additional Docker privileges and device access.
+
+## Switching between methods
+
+You can switch between STRM and FUSE at any time by changing the `MOUNT_METHOD` environment variable and restarting the application.
+
+**When switching:**
+1. Stop the application
+2. Change `MOUNT_METHOD` in your configuration
+3. The mount path will be cleared and recreated automatically
+4. Restart the application
+5. Wait for files to be remounted
+
+The application automatically cleans up the previous mount method's files during startup (appFunctions.py:13-31).

@@ -1,0 +1,152 @@
+---
+title: Introduction
+description: Mount your TorBox media with zero storage space using virtual files or tiny .strm files
+---
+
+<img
+  className="block dark:hidden"
+  src="https://raw.githubusercontent.com/TorBox-App/torbox-media-center/main/assets/header.png"
+  alt="TorBox Media Center"
+/>
+<img
+  className="hidden dark:block"
+  src="https://raw.githubusercontent.com/TorBox-App/torbox-media-center/main/assets/header.png"
+  alt="TorBox Media Center"
+/>
+
+## What is TorBox Media Center?
+
+TorBox Media Center allows you to easily mount your TorBox media in a no-frills way. This mounts your playable media files to your filesystem for use with Jellyfin, Emby, Plex, Infuse, VLC, or any other media player. With TorBox's custom built solution you can mount files as virtual files (which take up zero storage space), or as `.strm` files (which take up less than 1GB for libraries of any size).
+
+<CardGroup cols={2}>
+  <Card
+    title="Quickstart"
+    icon="rocket"
+    href="/quickstart"
+  >
+    Get TorBox Media Center running in under 5 minutes with Docker
+  </Card>
+  <Card
+    title="Docker installation"
+    icon="docker"
+    href="/installation/docker"
+  >
+    Detailed Docker setup with compose files and manual configuration
+  </Card>
+  <Card
+    title="Environment variables"
+    icon="gear"
+    href="/configuration/environment-variables"
+  >
+    Configure mount methods, refresh times, metadata scanning, and more
+  </Card>
+  <Card
+    title="Media server setup"
+    icon="server"
+    href="/guides/media-server-setup"
+  >
+    Connect Jellyfin, Plex, Emby, or other media players to your mount
+  </Card>
+</CardGroup>
+
+## Key features
+
+<AccordionGroup>
+  <Accordion title="Automatic media organization" icon="folder-tree">
+    Organizes your media automatically using the [TorBox Metadata Search API](https://www.postman.com/wamy-dev/torbox/request/ubj7d6v/get-metadata-by-query). Intelligently categorizes content into movies and series folders for seamless media server integration.
+  </Accordion>
+
+  <Accordion title="Two mounting methods" icon="hard-drive">
+    - **STRM method**: Creates tiny text files (< 1GB for any library size) that work perfectly with Jellyfin and Emby
+    - **FUSE method**: Mounts virtual files directly to your filesystem with zero storage space, compatible with Plex, VLC, Infuse, and everything else
+  </Accordion>
+
+  <Accordion title="Fast and efficient" icon="gauge-high">
+    Built from the ground up for TorBox. No reliance on RClone or unnecessary dependencies. Automatic library updates with configurable refresh intervals from 6 minutes to 24 hours.
+  </Accordion>
+
+  <Accordion title="Universal compatibility" icon="globe">
+    - **STRM method**: Works on all operating systems (Windows, Linux, macOS, BSD)
+    - **FUSE method**: Compatible with Linux, Unix, BSD, and macOS systems
+    - Supports torrents, usenet, and web downloads
+  </Accordion>
+
+  <Accordion title="Proxy support" icon="network-wired">
+    Built-in proxy for files if your connection is slow, ensuring smooth playback even on limited bandwidth.
+  </Accordion>
+
+  <Accordion title="No library size limits" icon="infinity">
+    Handle massive media libraries without worrying about storage constraints or performance degradation.
+  </Accordion>
+</AccordionGroup>
+
+## Comparison to Zurg
+
+TorBox Media Center is purpose-built for TorBox and offers several advantages over Zurg:
+
+| Feature | TorBox Media Center | Zurg |
+|---------|-------------------|------|
+| TorBox compatibility | Native support | Limited |
+| Setup complexity | Single command | Requires configuration |
+| Dependencies | Standalone | Requires RClone |
+| Performance | Optimized for TorBox | Generic |
+| Media server support | All major players | Limited |
+| Download types | Torrents, usenet, web | Varies |
+| Cost | Free with TorBox | Separate pricing |
+| Updates | Latest features included | Separate updates |
+
+<Info>
+  **Developer endorsed**: TorBox Media Center is developed by the TorBox team, ensuring tight integration and compliance with TorBox's terms of service.
+</Info>
+
+## What this application does not do
+
+To set proper expectations, here's what TorBox Media Center is not designed for:
+
+- **Folder customization**: Limited to `movies` and `series` folders (unless using raw mode)
+- **WebDAV server**: Use TorBox's built-in WebDAV instead
+- **Non-video files**: Limited to video files only
+- **Library repair/renewal**: This violates TorBox's terms of service
+- **Download management**: Cannot add, rename, or delete downloads (use TorBox dashboard)
+
+## Requirements
+
+Before you begin, make sure you have:
+
+1. **TorBox account**: Must be on a paid plan. [Sign up here](https://torbox.app/subscription)
+2. **Compatible system**: 
+   - Any OS for STRM method
+   - Linux/Unix/BSD/macOS for FUSE method
+3. **Runtime environment**: Python 3.6+ or Docker with administrator access
+4. **Media player**: Jellyfin, Plex, Emby, Infuse, VLC, or any video player
+
+<Note>
+  **Not sure which mount method to use?** 
+  - Choose **STRM** for Jellyfin or Emby
+  - Choose **FUSE** for Plex, VLC, Infuse, or other players
+  
+  See the [environment variables guide](/configuration/environment-variables) for detailed comparison.
+</Note>
+
+## Legal notice
+
+TorBox does not allow piracy or condone it in any way. This software is meant to be used with media you own and have the rights to.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Quickstart guide"
+    icon="play"
+    href="/quickstart"
+  >
+    Get started in under 5 minutes
+  </Card>
+  <Card
+    title="Choose your mount method"
+    icon="code-compare"
+    href="/configuration/choosing-mount-method"
+  >
+    Learn which mounting method is right for you
+  </Card>
+</CardGroup>

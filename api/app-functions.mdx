@@ -1,0 +1,223 @@
+---
+title: App functions
+description: Core application initialization and configuration functions
+---
+
+The app functions module provides core functionality for initializing the TorBox Media Center application, managing folders, fetching downloads, and checking versions.
+
+## Initialization functions
+
+### initializeFolders
+
+```python
+def initializeFolders()
+```
+
+Initializes the mount path folders for the media center. Creates the main mount directory and, if not in raw mode, creates separate `movies` and `series` subdirectories. Clears any existing content in these folders.
+
+<ParamField path="None" type="void">
+  This function takes no parameters.
+</ParamField>
+
+<ResponseField name="return" type="None">
+  This function does not return a value.
+</ResponseField>
+
+**Behavior:**
+- Creates the main `MOUNT_PATH` directory
+- In non-raw mode, also creates `movies` and `series` subdirectories
+- Removes all existing files and directories from these folders
+
+**Example:**
+
+```python
+from functions.appFunctions import initializeFolders
+
+initializeFolders()
+# Folders are now initialized and empty
+```
+
+### bootUp
+
+```python
+def bootUp()
+```
+
+Performs the initial boot sequence for the application. Logs configuration details, checks for version updates, and initializes folders.
+
+<ResponseField name="return" type="bool">
+  Always returns `True` on successful boot.
+</ResponseField>
+
+**Logs the following configuration:**
+- Mount method (FUSE or STRM)
+- Mount path location
+- TorBox API key (for verification)
+- Mount refresh time in hours
+- Version update warnings if a new version is available
+
+**Example:**
+
+```python
+from functions.appFunctions import bootUp
+
+bootUp()
+# Logs configuration and initializes the application
+```
+
+## Download management
+
+### getAllUserDownloadsFresh
+
+```python
+def getAllUserDownloadsFresh()
+```
+
+Fetches all user downloads fresh from the TorBox API across all download types (torrents, usenet, webdl). Clears the local database before fetching to ensure fresh data.
+
+<ResponseField name="return" type="list">
+  A list of all downloads across all types. Each download is a dictionary containing file metadata, download links, and media information.
+</ResponseField>
+
+**Process:**
+1. Iterates through all download types (torrents, usenet, webdl)
+2. Clears the database for each type
+3. Fetches downloads from the TorBox API
+4. Combines all downloads into a single list
+
+**Example:**
+
+```python
+from functions.appFunctions import getAllUserDownloadsFresh
+
+all_downloads = getAllUserDownloadsFresh()
+print(f"Total downloads: {len(all_downloads)}")
+```
+
+### getAllUserDownloads
+
+```python
+def getAllUserDownloads()
+```
+
+Retrieves all user downloads from the local database cache. This is faster than `getAllUserDownloadsFresh` as it reads from the local database instead of making API calls.
+
+<ResponseField name="return" type="list">
+  A list of all cached downloads across all types.
+</ResponseField>
+
+**Example:**
+
+```python
+from functions.appFunctions import getAllUserDownloads
+
+all_downloads = getAllUserDownloads()
+for download in all_downloads:
+    print(download.get('metadata_title'))
+```
+
+## Configuration getters
+
+### getMountMethod
+
+```python
+def getMountMethod()
+```
+
+Returns the currently configured mount method.
+
+<ResponseField name="return" type="str">
+  The mount method: either `"fuse"` or `"strm"`.
+</ResponseField>
+
+**Example:**
+
+```python
+from functions.appFunctions import getMountMethod
+
+method = getMountMethod()
+print(f"Using mount method: {method}")
+```
+
+### getMountPath
+
+```python
+def getMountPath()
+```
+
+Returns the configured mount path where media files are exposed.
+
+<ResponseField name="return" type="str">
+  The absolute path to the mount directory.
+</ResponseField>
+
+**Example:**
+
+```python
+from functions.appFunctions import getMountPath
+
+path = getMountPath()
+print(f"Media mounted at: {path}")
+```
+
+### getMountRefreshTime
+
+```python
+def getMountRefreshTime()
+```
+
+Returns the configured mount refresh time in hours.
+
+<ResponseField name="return" type="int | float">
+  The refresh interval in hours.
+</ResponseField>
+
+**Example:**
+
+```python
+from functions.appFunctions import getMountRefreshTime
+
+refresh_time = getMountRefreshTime()
+print(f"Mount refreshes every {refresh_time} hours")
+```
+
+## Version management
+
+### getLatestVersion
+
+```python
+def getLatestVersion()
+```
+
+Fetches the latest version tag from the TorBox Media Center GitHub repository.
+
+<ResponseField name="return" type="str | None">
+  The latest version tag (e.g., `"v1.2.3"`), or `None` if an error occurs.
+</ResponseField>
+
+**Process:**
+1. Queries the GitHub repository for all tags
+2. Filters out tag references
+3. Sorts tags by semantic version
+4. Returns the latest tag
+
+**Error handling:**
+Returns `None` and logs an error if:
+- Unable to connect to GitHub
+- Invalid repository URL
+- No tags found
+
+**Example:**
+
+```python
+from functions.appFunctions import getLatestVersion
+from library.app import getCurrentVersion
+
+latest = getLatestVersion()
+current = getCurrentVersion()
+
+if latest and latest != current:
+    print(f"Update available: {current} → {latest}")
+else:
+    print("You're running the latest version")
+```

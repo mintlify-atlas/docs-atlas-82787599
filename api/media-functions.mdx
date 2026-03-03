@@ -1,0 +1,284 @@
+---
+title: Media functions
+description: Helper functions for processing media titles and metadata
+---
+
+The media functions module provides utility functions for formatting media titles, cleaning filenames, and processing metadata for movies and TV series.
+
+## Series title formatting
+
+### constructSeriesTitle
+
+```python
+def constructSeriesTitle(season = None, episode = None, folder: bool = False)
+```
+
+Constructs a properly formatted title for a TV series based on season and episode numbers.
+
+<ParamField path="season" type="int | list | None" default="None">
+  The season number, a list of season numbers, or None.
+</ParamField>
+
+<ParamField path="episode" type="int | list | None" default="None">
+  The episode number, a list of episode numbers, or None.
+</ParamField>
+
+<ParamField path="folder" type="bool" default="False">
+  If True, formats the season as "Season X" for folder names. If False, uses "SXX" format for filenames.
+</ParamField>
+
+<ResponseField name="return" type="str | None">
+  The formatted series title, or None if no valid season/episode data provided.
+</ResponseField>
+
+**Formatting rules:**
+
+- Single season: `S01` (or `Season 1` if folder=True)
+- Season range: `S01-S03`
+- Single episode: `E01`
+- Episode range: `E01-E05`
+- Season and episode: `S01E01`
+- Season and episode range: `S01E01-E05`
+
+**Examples:**
+
+```python
+from functions.mediaFunctions import constructSeriesTitle
+
+# Single episode
+title = constructSeriesTitle(season=1, episode=5)
+print(title)  # "S01E05"
+
+# Season folder
+title = constructSeriesTitle(season=2, folder=True)
+print(title)  # "Season 2"
+
+# Episode range
+title = constructSeriesTitle(season=1, episode=[1, 3])
+print(title)  # "S01E01-E03"
+
+# Season range
+title = constructSeriesTitle(season=[1, 3], episode=None)
+print(title)  # "S01-S03"
+
+# Just episode (no season)
+title = constructSeriesTitle(episode=10)
+print(title)  # "E10"
+
+# No data
+title = constructSeriesTitle()
+print(title)  # None
+```
+
+**Usage in file organization:**
+
+```python
+from functions.mediaFunctions import constructSeriesTitle
+import os
+
+# Create season folder
+show_name = "Breaking Bad (2008)"
+season_folder = constructSeriesTitle(season=1, folder=True)
+folder_path = os.path.join("/media", "series", show_name, season_folder)
+print(folder_path)  # "/media/series/Breaking Bad (2008)/Season 1"
+
+# Create episode filename
+episode_title = constructSeriesTitle(season=1, episode=1)
+filename = f"Breaking Bad {episode_title}.mkv"
+print(filename)  # "Breaking Bad S01E01.mkv"
+```
+
+## Text cleaning functions
+
+### cleanTitle
+
+```python
+def cleanTitle(title: str)
+```
+
+Removes invalid filesystem characters from a title to make it safe for use in filenames and folder names.
+
+<ParamField path="title" type="str" required>
+  The title string to clean.
+</ParamField>
+
+<ResponseField name="return" type="str">
+  The cleaned title with invalid characters removed.
+</ResponseField>
+
+**Removed characters:**
+- Forward slash: `/`
+- Backslash: `\`
+- Colon: `:`
+- Asterisk: `*`
+- Question mark: `?`
+- Double quote: `"`
+- Less than: `<`
+- Greater than: `>`
+- Pipe: `|`
+
+**Examples:**
+
+```python
+from functions.mediaFunctions import cleanTitle
+
+title = cleanTitle("Mission: Impossible")
+print(title)  # "Mission Impossible"
+
+title = cleanTitle("What If...?")
+print(title)  # "What If..."
+
+title = cleanTitle("C:\\Users\\Movies\\Film")
+print(title)  # "CUsersMoviesFilm"
+
+title = cleanTitle("Spider-Man: No Way Home")
+print(title)  # "Spider-Man No Way Home"
+```
+
+**Use case:**
+
+```python
+from functions.mediaFunctions import cleanTitle
+import os
+
+# Safe folder creation
+raw_title = "The Good, the Bad and the Ugly (1966)"
+safe_title = cleanTitle(raw_title)
+folder = os.path.join("/media", "movies", safe_title)
+os.makedirs(folder, exist_ok=True)
+```
+
+### cleanYear
+
+```python
+def cleanYear(year: str | int)
+```
+
+Cleans and extracts a single year from various year formats commonly found in media metadata.
+
+<ParamField path="year" type="str | int | None" required>
+  The year value to clean. Can be an integer, a string, or None.
+</ParamField>
+
+<ResponseField name="return" type="int | None">
+  The cleaned year as an integer, or None if unable to parse.
+</ResponseField>
+
+**Supported formats:**
+- Integer: `2023` → `2023`
+- String: `"2023"` → `2023`
+- Year range: `"2023-2024"` → `2023` (returns first year)
+- Year range with various dashes: `"2023–2025"` → `2023`
+- Invalid/None: `None` → `None`
+
+**Examples:**
+
+```python
+from functions.mediaFunctions import cleanYear
+
+# Integer year
+year = cleanYear(2023)
+print(year)  # 2023
+
+# String year
+year = cleanYear("1999")
+print(year)  # 1999
+
+# Year range (takes first year)
+year = cleanYear("2020-2023")
+print(year)  # 2020
+
+# Different dash types
+year = cleanYear("2020–2023")  # Em dash
+print(year)  # 2020
+
+# Invalid input
+year = cleanYear(None)
+print(year)  # None
+
+year = cleanYear("Unknown")
+print(year)  # None
+```
+
+**Supported dash characters:**
+The function handles various Unicode dash characters:
+- Hyphen-minus: `-` (U+002D)
+- En dash: `–` (U+2013)
+- Em dash: `—` (U+2014)
+- Minus sign: `−` (U+2212)
+- Hyphen: `‐` (U+2010)
+- Non-breaking hyphen: `‑` (U+2011)
+
+**Error handling:**
+
+```python
+from functions.mediaFunctions import cleanYear
+
+# Function logs errors but returns None gracefully
+year = cleanYear("abc")
+print(year)  # None (error logged)
+
+year = cleanYear([])
+print(year)  # None (error logged)
+```
+
+**Usage in metadata processing:**
+
+```python
+from functions.mediaFunctions import cleanYear, cleanTitle
+
+# Process metadata from API
+metadata = {
+    "title": "Breaking Bad",
+    "releaseYears": "2008-2013"
+}
+
+title = cleanTitle(metadata["title"])
+year = cleanYear(metadata["releaseYears"])
+
+folder_name = f"{title} ({year})"
+print(folder_name)  # "Breaking Bad (2008)"
+```
+
+## Combined usage example
+
+Here's a complete example showing how these functions work together:
+
+```python
+from functions.mediaFunctions import constructSeriesTitle, cleanTitle, cleanYear
+import os
+
+# Process movie metadata
+movie_metadata = {
+    "title": "The Lord of the Rings: The Fellowship of the Ring",
+    "releaseYears": "2001"
+}
+
+movie_title = cleanTitle(movie_metadata["title"])
+movie_year = cleanYear(movie_metadata["releaseYears"])
+movie_filename = f"{movie_title} ({movie_year}).mkv"
+print(movie_filename)
+# "The Lord of the Rings The Fellowship of the Ring (2001).mkv"
+
+# Process series metadata
+series_metadata = {
+    "title": "Game of Thrones",
+    "releaseYears": "2011-2019",
+    "season": 1,
+    "episode": 1
+}
+
+series_title = cleanTitle(series_metadata["title"])
+series_year = cleanYear(series_metadata["releaseYears"])
+root_folder = f"{series_title} ({series_year})"
+season_folder = constructSeriesTitle(season=series_metadata["season"], folder=True)
+episode_part = constructSeriesTitle(
+    season=series_metadata["season"],
+    episode=series_metadata["episode"]
+)
+series_filename = f"{series_title} {episode_part}.mkv"
+
+full_path = os.path.join("/media", "series", root_folder, season_folder, series_filename)
+print(full_path)
+# "/media/series/Game of Thrones (2011)/Season 1/Game of Thrones S01E01.mkv"
+```

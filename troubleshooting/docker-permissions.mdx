@@ -1,0 +1,284 @@
+---
+title: Docker permissions
+description: Understanding and fixing permission issues with Docker volumes
+---
+
+Docker permission issues are one of the most common problems when running TorBox Media Center. This guide explains how Docker handles permissions and how to fix common permission-related errors.
+
+## Understanding Docker permissions
+
+When Docker creates files and directories, it uses the user ID (UID) and group ID (GID) of the process running inside the container. By default, this is often the `root` user (UID 0), which can cause permission conflicts with your host system.
+
+### The permission mismatch problem
+
+If Docker creates files as `root` but your host user doesn't have permission to access them, you'll encounter errors like:
+
+- Nothing showing up in the mounted space
+- Permission denied when accessing files
+- Media servers unable to read the mounted files
+
+## Using PUID and PGID
+
+The recommended solution is to tell Docker to run as your user by setting the `PUID` (User ID) and `PGID` (Group ID) environment variables.
+
+### Finding your UID and GID
+
+Get your current user's ID:
+
+```bash
+id -u  # Prints your user ID
+id -g  # Prints your group ID
+```
+
+Example output:
+```
+1000  # User ID
+1000  # Group ID
+```
+
+### Setting PUID and PGID in Docker
+
+**Docker run command:**
+
+```bash
+docker run -it -d \
+  --name=torbox-media-center \
+  --restart=always \
+  -v /home/$(whoami)/torbox:/torbox \
+  -e PUID=$(id -u) \
+  -e PGID=$(id -g) \
+  -e TORBOX_API_KEY=<YOUR_KEY> \
+  -e MOUNT_PATH=/torbox \
+  anonymoussystems/torbox-media-center:latest
+```
+
+**Docker Compose:**
+
+```yaml
+name: torbox-media-center
+services:
+  torbox-media-center:
+    container_name: torbox-media-center
+    stdin_open: true
+    tty: true
+    restart: always
+    volumes:
+      - /home/youruser/torbox:/torbox
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TORBOX_API_KEY=<YOUR_KEY>
+      - MOUNT_METHOD=strm
+      - MOUNT_PATH=/torbox
+    image: anonymoussystems/torbox-media-center:latest
+```
+
+## Volume mapping best practices
+
+Proper volume mapping is critical for both the TorBox Media Center and your media server to access the same files.
+
+### Understanding volume syntax
+
+The volume mapping syntax is:
+
+```
+-v <host_path>:<container_path>
+```
+
+- **host_path**: The actual directory on your computer
+- **container_path**: Where the directory appears inside the Docker container
+
+### Example: Coordinating multiple containers
+
+Let's say you want TorBox Media Center to save files to `/home/wamy/torbox` on your host system.
+
+**TorBox Media Center setup:**
+
+```bash
+docker run -it -d \
+  --name=torbox-media-center \
+  -v /home/wamy/torbox:/torbox \
+  -e MOUNT_PATH=/torbox \
+  -e TORBOX_API_KEY=<YOUR_KEY> \
+  anonymoussystems/torbox-media-center:latest
+```
+
+This configuration:
+- Maps `/home/wamy/torbox` (host) to `/torbox` (container)
+- Sets `MOUNT_PATH=/torbox` so files are created at `/torbox` inside the container
+- Results in files appearing at `/home/wamy/torbox` on the host
+
+**Media server setup (Jellyfin example):**
+
+```bash
+docker run -d \
+  --name=jellyfin \
+  -v /home/wamy/torbox:/torbox-media-center \
+  -e PUID=1000 \
+  -e PGID=1000 \
+  jellyfin/jellyfin:latest
+```
+
+This configuration:
+- Maps the same host directory `/home/wamy/torbox` to `/torbox-media-center` inside Jellyfin
+- Allows Jellyfin to access the files at `/torbox-media-center/movies` and `/torbox-media-center/series`
+
+<Warning>
+The container paths can be different (`/torbox` vs `/torbox-media-center`), but the host path must be the same (`/home/wamy/torbox`).
+</Warning>
+
+## Fixing existing permission issues
+
+If you already have files with incorrect permissions, you can fix them using `chown`.
+
+### Using chown to fix permissions
+
+**Fix ownership for a directory:**
+
+```bash
+sudo chown -R $(whoami):$(whoami) /home/$(whoami)/torbox
+```
+
+This command:
+- `-R`: Recursively changes ownership of all files and subdirectories
+- `$(whoami)`: Uses your current username for both user and group
+- Changes ownership of `/home/$(whoami)/torbox` and everything inside it
+
+**Fix ownership with specific user/group:**
+
+```bash
+sudo chown -R 1000:1000 /home/youruser/torbox
+```
+
+Replace `1000:1000` with your actual UID:GID.
+
+### Verify permissions
+
+Check the permissions of your directory:
+
+```bash
+ls -la /home/$(whoami)/torbox
+```
+
+Expected output:
+```
+drwxr-xr-x 5 youruser youruser 4096 Mar 3 10:30 .
+drwxr-xr-x 3 youruser youruser 4096 Mar 3 10:25 ..
+drwxr-xr-x 2 youruser youruser 4096 Mar 3 10:30 movies
+drwxr-xr-x 2 youruser youruser 4096 Mar 3 10:30 series
+```
+
+The third and fourth columns should show your username.
+
+## Common permission errors
+
+### Error: Permission denied
+
+```
+PermissionError: [Errno 13] Permission denied: '/torbox/movies'
+```
+
+**Solution:** Set PUID and PGID to match your user, or use `chown` to fix existing permissions.
+
+### Error: Cannot create directory
+
+```
+OSError: [Errno 13] Permission denied: '/torbox'
+```
+
+**Solution:** Ensure the mount directory exists and has correct permissions:
+
+```bash
+mkdir -p /home/$(whoami)/torbox
+chown -R $(whoami):$(whoami) /home/$(whoami)/torbox
+```
+
+### Error: Files owned by root
+
+If files are created as `root:root`, your media server may not be able to read them.
+
+**Solution:** Stop the container, fix permissions, and restart with PUID/PGID:
+
+```bash
+# Stop container
+docker stop torbox-media-center
+
+# Fix permissions
+sudo chown -R $(whoami):$(whoami) /home/$(whoami)/torbox
+
+# Remove old container
+docker rm torbox-media-center
+
+# Start with PUID/PGID
+docker run -it -d \
+  --name=torbox-media-center \
+  -v /home/$(whoami)/torbox:/torbox \
+  -e PUID=$(id -u) \
+  -e PGID=$(id -g) \
+  -e TORBOX_API_KEY=<YOUR_KEY> \
+  -e MOUNT_PATH=/torbox \
+  anonymoussystems/torbox-media-center:latest
+```
+
+## FUSE-specific permissions
+
+When using the `fuse` mount method, additional permissions are required.
+
+### Required capabilities
+
+The container needs the `SYS_ADMIN` capability to mount FUSE filesystems:
+
+```yaml
+cap_add:
+  - SYS_ADMIN
+security_opt:
+  - apparmor:unconfined
+```
+
+### Device access
+
+The `/dev/fuse` device must be accessible:
+
+```yaml
+devices:
+  - /dev/fuse:/dev/fuse
+```
+
+### Complete FUSE example
+
+```yaml
+name: torbox-media-center
+services:
+  torbox-media-center:
+    container_name: torbox-media-center
+    stdin_open: true
+    tty: true
+    restart: always
+    volumes:
+      - /home/youruser/torbox:/torbox
+    devices:
+      - /dev/fuse:/dev/fuse
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TORBOX_API_KEY=<YOUR_KEY>
+      - MOUNT_METHOD=fuse
+      - MOUNT_PATH=/torbox
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - apparmor:unconfined
+    image: anonymoussystems/torbox-media-center:latest
+```
+
+See the [FUSE issues](/troubleshooting/fuse-issues) guide for more FUSE-specific troubleshooting.
+
+## Quick reference
+
+| Issue | Solution |
+|-------|----------|
+| Files owned by root | Set `PUID` and `PGID` environment variables |
+| Permission denied errors | Use `chown -R $(whoami):$(whoami)` on the mount directory |
+| Media server can't access files | Ensure both containers map the same host directory |
+| Directory doesn't exist | Create it with `mkdir -p` before running the container |
+| FUSE mount fails | Add `SYS_ADMIN` capability and `/dev/fuse` device |

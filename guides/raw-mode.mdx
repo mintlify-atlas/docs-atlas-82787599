@@ -1,0 +1,179 @@
+---
+title: RAW_MODE
+description: Use the original file structure without metadata organization
+---
+
+RAW_MODE presents your TorBox files in their original structure, similar to what you would see with WebDAV. This bypasses all metadata scanning and organization, giving you direct access to your files exactly as they're stored in TorBox.
+
+## What is RAW_MODE?
+
+By default, TorBox Media Center organizes your files into `movies` and `series` folders with cleaned-up filenames. RAW_MODE disables this organization and presents files in their original structure.
+
+**With RAW_MODE disabled (default):**
+```
+/torbox/
+├── movies/
+│   ├── Movie Title (2023).mkv
+│   └── Another Movie (2022).mp4
+└── series/
+    └── TV Show (2024)/
+        └── Season 1/
+            └── TV Show S01E01.mkv
+```
+
+**With RAW_MODE enabled:**
+```
+/torbox/
+├── [torrent_hash_1]/
+│   └── original_file_name.mkv
+├── [torrent_hash_2]/
+│   ├── video_file_1.mp4
+│   └── video_file_2.mp4
+└── [download_folder_name]/
+    └── some_video.mkv
+```
+
+## When to use RAW_MODE
+
+Consider enabling RAW_MODE if:
+
+- You want to see the exact original file and folder structure
+- You prefer manual organization over automatic metadata scanning
+- Your media player doesn't need organized folders
+- You're using TorBox Media Center with non-media server applications
+- You want to avoid any metadata API calls
+
+<Warning>
+RAW_MODE is **not compatible** with metadata scanning. Enabling RAW_MODE automatically disables the `ENABLE_METADATA` option.
+</Warning>
+
+## Configuration
+
+Enable RAW_MODE by setting the environment variable:
+
+```bash
+docker run -it -d \
+    --name=torbox-media-center \
+    --restart=always \
+    --init \
+    -v /home/$(whoami)/torbox:/torbox \
+    -e TORBOX_API_KEY=<YOUR_API_KEY> \
+    -e MOUNT_METHOD=strm \
+    -e MOUNT_PATH=/torbox \
+    -e RAW_MODE=true \
+    anonymoussystems/torbox-media-center:latest
+```
+
+Or with Docker Compose:
+
+```yaml
+name: torbox-media-center
+services:
+    torbox-media-center:
+        container_name: torbox-media-center
+        stdin_open: true
+        tty: true
+        restart: always
+        volumes:
+            - /home/$(whoami)/torbox:/torbox
+        environment:
+            - TORBOX_API_KEY=<YOUR_API_KEY>
+            - MOUNT_METHOD=strm
+            - MOUNT_PATH=/torbox
+            - RAW_MODE=true
+        image: anonymoussystems/torbox-media-center:latest
+```
+
+## How RAW_MODE works
+
+When RAW_MODE is enabled, TorBox Media Center:
+
+1. **Skips metadata scanning** - No API calls to the TorBox Metadata Search API
+2. **Preserves original structure** - Files remain in their download folders
+3. **Uses original filenames** - No cleanup or renaming of files
+4. **Disables categorization** - No separation into movies/series folders
+
+From library/app.py:8-29:
+```python
+RAW_MODE = os.getenv("RAW_MODE", "false").lower() == "true"
+
+if SCAN_METADATA and RAW_MODE:
+    SCAN_METADATA = False
+    print("!!! RAW_MODE IS NOT COMPATIBLE WITH METADATA SCANNING. Disabling metadata scanning. !!!")
+```
+
+From functions/appFunctions.py:13-31:
+```python
+def initializeFolders():
+    folders = [MOUNT_PATH]
+    if not RAW_MODE:
+        folders.extend([
+            os.path.join(MOUNT_PATH, "movies"),
+            os.path.join(MOUNT_PATH, "series"),
+        ])
+    for folder in folders:
+        if os.path.exists(folder):
+            logging.debug(f"Folder {folder} already exists. Deleting...")
+            for item in os.listdir(folder):
+                item_path = os.path.join(folder, item)
+                if os.path.isdir(item_path):
+                    shutil.rmtree(item_path)
+                else:
+                    os.remove(item_path)
+        else:
+            logging.debug(f"Creating folder {folder}...")
+            os.makedirs(folder, exist_ok=True)
+```
+
+## Folder structure details
+
+With RAW_MODE enabled:
+
+- Each download appears as its own folder
+- Folder names match the original torrent/download name
+- If a download has no name, the hash is used as the folder name
+- Only video files are included (based on mimetype filtering)
+- Non-video files are ignored
+
+## Compatibility with mount methods
+
+RAW_MODE works with both mounting methods:
+
+- **STRM** - Creates `.strm` files in the original folder structure
+- **FUSE** - Mounts virtual files in the original folder structure
+
+## Performance benefits
+
+RAW_MODE can improve performance:
+
+- **No metadata API calls** - Eliminates network requests to the search API
+- **Faster processing** - Skips metadata lookup and file renaming
+- **No rate limiting** - Avoids potential 429 errors from the metadata API
+- **Simpler structure** - Easier for TorBox Media Center to maintain
+
+<Tip>
+If you're experiencing rate limiting issues with the metadata API, enabling RAW_MODE is an effective workaround.
+</Tip>
+
+## Limitations
+
+RAW_MODE has some trade-offs:
+
+- No automatic organization into movies/series folders
+- Original filenames may not be media server friendly
+- No metadata enrichment (posters, descriptions, etc.)
+- Media servers may struggle to identify content correctly
+- You'll need to configure your media server differently
+
+## Using RAW_MODE with media servers
+
+When using RAW_MODE with Plex, Jellyfin, or Emby:
+
+1. Add the entire mount path as a single library
+2. Enable aggressive metadata scanning in your media server
+3. Expect lower match rates for content
+4. Consider using the media server's "Fix Match" feature for misidentified content
+
+<Note>
+RAW_MODE is best suited for advanced users who prefer manual control over automatic organization, or for use cases outside of traditional media server setups.
+</Note>

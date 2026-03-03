@@ -1,0 +1,296 @@
+---
+title: TorBox functions
+description: Functions for interacting with the TorBox API and processing downloads
+---
+
+The TorBox functions module handles all interactions with the TorBox API, including fetching downloads, searching metadata, and downloading file content.
+
+## Enums
+
+### DownloadType
+
+```python
+class DownloadType(Enum):
+    torrent = "torrents"
+    usenet = "usenet"
+    webdl = "webdl"
+```
+
+Enumeration of supported download types in TorBox.
+
+### IDType
+
+```python
+class IDType(Enum):
+    torrents = "torrent_id"
+    usenet = "usenet_id"
+    webdl = "web_id"
+```
+
+Enumeration of ID field names for each download type.
+
+## Download management
+
+### getUserDownloads
+
+```python
+def getUserDownloads(type: DownloadType)
+```
+
+Fetches all downloads of a specific type from the TorBox API, processes video files, enriches with metadata, and stores in the database.
+
+<ParamField path="type" type="DownloadType" required>
+  The type of downloads to fetch (torrents, usenet, or webdl).
+</ParamField>
+
+<ResponseField name="return" type="tuple">
+  A tuple containing:
+  - `files` (list | None): List of processed file dictionaries, or None on error
+  - `success` (bool): Whether the operation succeeded
+  - `detail` (str): Success or error message
+</ResponseField>
+
+**Process:**
+1. Fetches downloads from TorBox API with pagination (1000 items per page)
+2. Filters for cached items only
+3. Processes video files in parallel using multiple threads
+4. Enriches each file with metadata (title, year, media type, images)
+5. Stores processed files in the database
+
+**File filtering:**
+- Only processes files with MIME type `video/x-matroska` (MKV) or `video/mp4` (MP4)
+- Skips non-cached items
+
+**Example:**
+
+```python
+from functions.torboxFunctions import getUserDownloads, DownloadType
+
+files, success, detail = getUserDownloads(DownloadType.torrent)
+
+if success:
+    print(f"Retrieved {len(files)} torrent files")
+    for file in files:
+        print(f"{file['metadata_title']} - {file['file_size']} bytes")
+else:
+    print(f"Error: {detail}")
+```
+
+### process_file
+
+```python
+def process_file(item, file, type)
+```
+
+Processes a single file from a TorBox download item. This is an internal function called by `getUserDownloads`.
+
+<ParamField path="item" type="dict" required>
+  The download item from the TorBox API.
+</ParamField>
+
+<ParamField path="file" type="dict" required>
+  The file object within the download item.
+</ParamField>
+
+<ParamField path="type" type="DownloadType" required>
+  The download type.
+</ParamField>
+
+<ResponseField name="return" type="dict | None">
+  A processed file dictionary with metadata, or None if the file should be skipped.
+</ResponseField>
+
+**Returned file structure:**
+```python
+{
+    "item_id": int,
+    "type": str,
+    "folder_name": str,
+    "folder_hash": str,
+    "file_id": int,
+    "file_name": str,
+    "file_size": int,
+    "file_mimetype": str,
+    "path": str,
+    "download_link": str,
+    "extension": str,
+    "metadata_title": str,
+    "metadata_link": str,
+    "metadata_mediatype": str,  # "movie" or "series"
+    "metadata_image": str,
+    "metadata_backdrop": str,
+    "metadata_years": int,
+    "metadata_season": int,  # for series only
+    "metadata_episode": int,  # for series only
+    "metadata_filename": str,
+    "metadata_foldername": str,  # for series only
+    "metadata_rootfoldername": str,
+}
+```
+
+## Metadata functions
+
+### searchMetadata
+
+```python
+def searchMetadata(query: str, title_data: dict, file_name: str, full_title: str, hash: str, item_name: str)
+```
+
+Searches for metadata about a media file using the TorBox search API. Enriches file information with title, media type, year, images, and season/episode data.
+
+<ParamField path="query" type="str" required>
+  The search query (usually the parsed title from the filename).
+</ParamField>
+
+<ParamField path="title_data" type="dict" required>
+  Parsed title data from PTN (parse-torrent-name) containing season, episode, year, etc.
+</ParamField>
+
+<ParamField path="file_name" type="str" required>
+  The original filename.
+</ParamField>
+
+<ParamField path="full_title" type="str" required>
+  The full title including folder name and filename for better matching.
+</ParamField>
+
+<ParamField path="hash" type="str" required>
+  The hash of the torrent/download item for logging.
+</ParamField>
+
+<ParamField path="item_name" type="str" required>
+  The name of the parent download item.
+</ParamField>
+
+<ResponseField name="return" type="tuple">
+  A tuple containing:
+  - `metadata` (dict): Dictionary of metadata fields
+  - `success` (bool): Whether metadata was found
+  - `detail` (str): Success or error message
+</ResponseField>
+
+**Metadata structure:**
+```python
+{
+    "metadata_title": str,  # Cleaned title
+    "metadata_link": str,  # Link to media info
+    "metadata_mediatype": str,  # "movie", "series", or "anime"
+    "metadata_image": str,  # Poster image URL
+    "metadata_backdrop": str,  # Backdrop image URL
+    "metadata_years": int,  # Release year
+    "metadata_season": int,  # Season number (series only)
+    "metadata_episode": int,  # Episode number (series only)
+    "metadata_filename": str,  # Formatted filename
+    "metadata_foldername": str,  # Season folder name (series only)
+    "metadata_rootfoldername": str,  # Root folder name
+}
+```
+
+**Example:**
+
+```python
+import PTN
+from functions.torboxFunctions import searchMetadata
+
+file_name = "The.Matrix.1999.1080p.BluRay.mkv"
+title_data = PTN.parse(file_name)
+
+metadata, success, detail = searchMetadata(
+    query=title_data.get("title"),
+    title_data=title_data,
+    file_name=file_name,
+    full_title=file_name,
+    hash="abc123",
+    item_name="The Matrix Collection"
+)
+
+if success:
+    print(f"Title: {metadata['metadata_title']}")
+    print(f"Year: {metadata['metadata_years']}")
+    print(f"Type: {metadata['metadata_mediatype']}")
+```
+
+## File download functions
+
+### getDownloadLink
+
+```python
+def getDownloadLink(url: str)
+```
+
+Resolves a TorBox API URL to the actual download link by following redirects.
+
+<ParamField path="url" type="str" required>
+  The TorBox API URL that redirects to the actual file.
+</ParamField>
+
+<ResponseField name="return" type="str">
+  The resolved download URL, or the original URL if no redirect occurs.
+</ResponseField>
+
+**Example:**
+
+```python
+from functions.torboxFunctions import getDownloadLink
+
+api_url = "https://api.torbox.app/v1/api/torrents/requestdl?token=...&torrent_id=123&file_id=456&redirect=true"
+actual_url = getDownloadLink(api_url)
+print(f"Actual download URL: {actual_url}")
+```
+
+### downloadFile
+
+```python
+def downloadFile(url: str, size: int, offset: int = 0)
+```
+
+Downloads a specific byte range from a file URL using HTTP range requests.
+
+<ParamField path="url" type="str" required>
+  The direct download URL.
+</ParamField>
+
+<ParamField path="size" type="int" required>
+  The number of bytes to download.
+</ParamField>
+
+<ParamField path="offset" type="int" default="0">
+  The starting byte offset.
+</ParamField>
+
+<ResponseField name="return" type="bytes">
+  The downloaded file content.
+</ResponseField>
+
+**Exceptions:**
+- Raises `Exception` if the response status code is not 200 (OK) or 206 (Partial Content)
+
+**Example:**
+
+```python
+from functions.torboxFunctions import downloadFile, getDownloadLink
+
+api_url = "https://api.torbox.app/v1/api/torrents/requestdl?..."
+download_url = getDownloadLink(api_url)
+
+# Download first 1MB
+data = downloadFile(download_url, size=1024*1024, offset=0)
+print(f"Downloaded {len(data)} bytes")
+
+# Download next 1MB
+data = downloadFile(download_url, size=1024*1024, offset=1024*1024)
+print(f"Downloaded {len(data)} bytes")
+```
+
+## Constants
+
+### ACCEPTABLE_MIME_TYPES
+
+```python
+ACCEPTABLE_MIME_TYPES = [
+    "video/x-matroska",
+    "video/mp4",
+]
+```
+
+List of video MIME types that are processed by the system. Files with other MIME types are skipped.

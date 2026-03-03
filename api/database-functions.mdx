@@ -1,0 +1,291 @@
+---
+title: Database functions
+description: Thread-safe database operations for caching TorBox downloads
+---
+
+The database functions module provides thread-safe operations for storing and retrieving TorBox download metadata using TinyDB as a local cache.
+
+## Database connection management
+
+### getDatabase
+
+```python
+def getDatabase(name: str = "db")
+```
+
+Returns a TinyDB database instance with thread-safe storage. Uses a connection pool pattern to avoid creating multiple connections to the same database.
+
+<ParamField path="name" type="str" default="db">
+  The database name (corresponds to `{name}.json` file).
+</ParamField>
+
+<ResponseField name="return" type="TinyDB | None">
+  The TinyDB database instance, or None if connection fails.
+</ResponseField>
+
+**Connection pooling:**
+- Creates a single shared connection per database name
+- Automatically creates the database file if it doesn't exist
+- Thread-safe initialization using a global lock
+
+**Example:**
+
+```python
+from functions.databaseFunctions import getDatabase
+
+db = getDatabase("torrents")
+if db:
+    print(f"Connected to database: torrents.json")
+```
+
+### getDatabaseLock
+
+```python
+def getDatabaseLock(name: str = "db")
+```
+
+Returns the threading lock for a specified database. Each database has its own lock to prevent race conditions.
+
+<ParamField path="name" type="str" default="db">
+  The database name.
+</ParamField>
+
+<ResponseField name="return" type="threading.Lock | None">
+  The lock object for the database, or None if the database doesn't exist.
+</ResponseField>
+
+**Example:**
+
+```python
+from functions.databaseFunctions import getDatabase, getDatabaseLock
+
+db = getDatabase("torrents")
+lock = getDatabaseLock("torrents")
+
+with lock:
+    # Perform thread-safe operations
+    all_data = db.all()
+```
+
+## Data operations
+
+### insertData
+
+```python
+def insertData(data: dict, type: str)
+```
+
+Inserts a data record into the database with thread safety.
+
+<ParamField path="data" type="dict" required>
+  The data dictionary to insert.
+</ParamField>
+
+<ParamField path="type" type="str" required>
+  The database type/name (e.g., "torrents", "usenet", "webdl").
+</ParamField>
+
+<ResponseField name="return" type="tuple">
+  A tuple containing:
+  - `success` (bool): True if insertion succeeded
+  - `message` (str): Success or error message
+</ResponseField>
+
+**Thread safety:**
+Acquires the database lock before inserting to prevent concurrent write conflicts.
+
+**Example:**
+
+```python
+from functions.databaseFunctions import insertData
+
+file_data = {
+    "item_id": 12345,
+    "file_name": "movie.mkv",
+    "file_size": 1024000000,
+    "metadata_title": "The Matrix",
+    "metadata_years": 1999,
+}
+
+success, message = insertData(file_data, "torrents")
+if success:
+    print("Data inserted successfully")
+else:
+    print(f"Error: {message}")
+```
+
+### getAllData
+
+```python
+def getAllData(type: str)
+```
+
+Retrieves all data from a database with thread safety.
+
+<ParamField path="type" type="str" required>
+  The database type/name to query.
+</ParamField>
+
+<ResponseField name="return" type="tuple">
+  A tuple containing:
+  - `data` (list | None): List of all records, or None on error
+  - `success` (bool): True if retrieval succeeded
+  - `message` (str): Success or error message
+</ResponseField>
+
+**Example:**
+
+```python
+from functions.databaseFunctions import getAllData
+
+data, success, message = getAllData("torrents")
+
+if success:
+    print(f"Retrieved {len(data)} records")
+    for record in data:
+        print(f"- {record.get('metadata_title')}")
+else:
+    print(f"Error: {message}")
+```
+
+### clearDatabase
+
+```python
+def clearDatabase(type: str)
+```
+
+Clears all records from a database with thread safety.
+
+<ParamField path="type" type="str" required>
+  The database type/name to clear.
+</ParamField>
+
+<ResponseField name="return" type="tuple">
+  A tuple containing:
+  - `success` (bool): True if clearing succeeded
+  - `message` (str): Success or error message
+</ResponseField>
+
+**Warning:**
+This operation is irreversible and removes all data from the database.
+
+**Example:**
+
+```python
+from functions.databaseFunctions import clearDatabase
+
+success, message = clearDatabase("torrents")
+if success:
+    print("Database cleared")
+else:
+    print(f"Error: {message}")
+```
+
+## Connection cleanup
+
+### closeDatabase
+
+```python
+def closeDatabase(name: str = "db")
+```
+
+Closes a specific database connection and removes it from the connection pool.
+
+<ParamField path="name" type="str" default="db">
+  The database name to close.
+</ParamField>
+
+<ResponseField name="return" type="tuple">
+  A tuple containing:
+  - `success` (bool): True if closing succeeded or database wasn't open
+  - `message` (str): Success or error message
+</ResponseField>
+
+**Example:**
+
+```python
+from functions.databaseFunctions import closeDatabase
+
+success, message = closeDatabase("torrents")
+print(message)  # "Database closed successfully." or "Database was not open."
+```
+
+### closeAllDatabases
+
+```python
+def closeAllDatabases()
+```
+
+Closes all open database connections.
+
+<ResponseField name="return" type="tuple">
+  A tuple containing:
+  - `success` (bool): Always True
+  - `message` (str): Summary message indicating number of connections closed
+</ResponseField>
+
+**Example:**
+
+```python
+from functions.databaseFunctions import closeAllDatabases
+
+success, message = closeAllDatabases()
+print(message)  # "Closed 3 database connections."
+```
+
+## Thread safety model
+
+All database operations in this module are thread-safe:
+
+1. **Global lock**: Protects the connection pool during database initialization
+2. **Per-database locks**: Each database has its own lock for data operations
+3. **Automatic locking**: All data operations acquire locks before accessing the database
+
+**Example of manual locking:**
+
+```python
+from functions.databaseFunctions import getDatabase, getDatabaseLock
+
+db = getDatabase("torrents")
+lock = getDatabaseLock("torrents")
+
+with lock:
+    # Multiple operations performed atomically
+    count = len(db.all())
+    if count > 0:
+        db.truncate()
+        print(f"Cleared {count} records")
+```
+
+## Database storage format
+
+Databases are stored as JSON files:
+
+- `torrents.json` - Torrent download cache
+- `usenet.json` - Usenet download cache
+- `webdl.json` - WebDL download cache
+
+Each record is a dictionary containing file metadata, download links, and media information as returned by `process_file` in the TorBox functions module.
+
+## Error handling
+
+All functions return tuple-based results for consistent error handling:
+
+```python
+success, message = insertData(data, "torrents")
+if not success:
+    # Handle error
+    print(f"Database error: {message}")
+```
+
+For functions that return data:
+
+```python
+data, success, message = getAllData("torrents")
+if not success:
+    # Handle error
+    print(f"Database error: {message}")
+else:
+    # Use data
+    process_files(data)
+```

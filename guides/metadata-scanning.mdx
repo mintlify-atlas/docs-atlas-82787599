@@ -1,0 +1,283 @@
+---
+title: Metadata scanning
+description: Understand how TorBox Media Center scans and organizes your media
+---
+
+The `ENABLE_METADATA` option controls whether TorBox Media Center attempts to identify your media files and organize them properly. When enabled, it uses the TorBox Metadata Search API to find correct information for your files.
+
+## What is metadata scanning?
+
+Metadata scanning analyzes your video files and attempts to:
+
+- Identify whether content is a movie, TV show, or anime
+- Find the correct title and release year
+- Determine season and episode numbers for series
+- Organize files into appropriate folders
+- Create clean, media-server-friendly filenames
+
+**Without metadata scanning:**
+- All video files are placed in the `movies` folder
+- Original filenames are preserved
+- No API calls to the metadata service
+
+**With metadata scanning:**
+- Files are categorized into `movies` or `series` folders
+- Filenames are cleaned and standardized
+- Series are organized into season folders
+- Metadata is enriched with posters and descriptions
+
+## Configuration
+
+Set the `ENABLE_METADATA` environment variable:
+
+```bash
+docker run -it -d \
+    --name=torbox-media-center \
+    --restart=always \
+    --init \
+    -v /home/$(whoami)/torbox:/torbox \
+    -e TORBOX_API_KEY=<YOUR_API_KEY> \
+    -e MOUNT_METHOD=strm \
+    -e MOUNT_PATH=/torbox \
+    -e ENABLE_METADATA=true \
+    anonymoussystems/torbox-media-center:latest
+```
+
+Or with Docker Compose:
+
+```yaml
+name: torbox-media-center
+services:
+    torbox-media-center:
+        container_name: torbox-media-center
+        stdin_open: true
+        tty: true
+        restart: always
+        volumes:
+            - /home/$(whoami)/torbox:/torbox
+        environment:
+            - TORBOX_API_KEY=<YOUR_API_KEY>
+            - MOUNT_METHOD=strm
+            - MOUNT_PATH=/torbox
+            - ENABLE_METADATA=true
+        image: anonymoussystems/torbox-media-center:latest
+```
+
+<Note>
+The default value is `false`. Metadata scanning is opt-in.
+</Note>
+
+## How metadata search works
+
+The metadata search process follows these steps:
+
+1. **File name parsing** - TorBox Media Center uses PTN (Parse Torrent Name) to extract information from filenames
+2. **API query** - Sends the parsed title to the TorBox Metadata Search API
+3. **Result matching** - Receives metadata including title, type, year, and images
+4. **File organization** - Renames and moves files based on the metadata
+
+From functions/torboxFunctions.py:135-193:
+```python
+def searchMetadata(query: str, title_data: dict, file_name: str, full_title: str, hash: str, item_name: str):
+    base_metadata = {
+        "metadata_title": cleanTitle(query),
+        "metadata_link": None,
+        "metadata_mediatype": "movie",
+        "metadata_image": None,
+        "metadata_backdrop": None,
+        "metadata_years": None,
+        "metadata_season": None,
+        "metadata_episode": None,
+        "metadata_filename": file_name,
+        "metadata_rootfoldername": title_data.get("item_name", None),
+    }
+    if not SCAN_METADATA:
+        base_metadata["metadata_rootfoldername"] = item_name
+        return base_metadata, False, "Metadata scanning is disabled."
+    
+    extension = os.path.splitext(file_name)[-1]
+    try:
+        response = requestWrapper(search_api_http_client, "GET", f"/meta/search/{full_title}", params={"type": "file"})
+    except Exception as e:
+        logging.error(f"Error searching metadata: {e}")
+        return base_metadata, False, f"Error searching metadata: {e}. Searching for {query}, item hash: {hash}"
+    
+    if response.status_code != 200:
+        logging.error(f"Error searching metadata: {response.status_code}. {response.text}")
+        return base_metadata, False, f"Error searching metadata. {response.status_code}. Searching for {query}, item hash: {hash}"
+    
+    try:
+        data = response.json().get("data", [])[0]
+
+        title = cleanTitle(data.get("title"))
+        base_metadata["metadata_title"] = title
+        base_metadata["metadata_years"] = cleanYear(title_data.get("year", None) or data.get("releaseYears", None))
+
+        if data.get("type") == "anime" or data.get("type") == "series":
+            series_season_episode = constructSeriesTitle(season=title_data.get("season", None), episode=title_data.get("episode", None))
+            file_name = f"{title} {series_season_episode}{extension}"
+            base_metadata["metadata_foldername"] = constructSeriesTitle(season=title_data.get("season", 1), folder=True)
+            base_metadata["metadata_season"] = title_data.get("season", 1)
+            base_metadata["metadata_episode"] = title_data.get("episode")
+        elif data.get("type") == "movie":
+            file_name = f"{title} ({base_metadata['metadata_years']}){extension}"
+        else:
+            return base_metadata, False, f"No metadata found. Searching for {query}, item hash: {hash}"
+            
+        base_metadata["metadata_filename"] = file_name
+        base_metadata["metadata_mediatype"] = data.get("type")
+        base_metadata["metadata_link"] = data.get("link")
+        base_metadata["metadata_image"] = data.get("image")
+        base_metadata["metadata_backdrop"] = data.get("backdrop")
+        base_metadata["metadata_rootfoldername"] = f"{title} ({base_metadata['metadata_years']})"
+
+        return base_metadata, True, f"Metadata found. Searching for {query}, item hash: {hash}"
+    except IndexError:
+        return base_metadata, False, f"No metadata found. Searching for {query}, item hash: {hash}"
+```
+
+## File naming conventions
+
+When metadata scanning is enabled, files are renamed:
+
+**Movies:**
+```
+Title (Year).ext
+```
+Example: `The Matrix (1999).mkv`
+
+**TV Shows:**
+```
+Show Title (Year)/Season N/Show Title S01E01.ext
+```
+Example: `Breaking Bad (2008)/Season 1/Breaking Bad S01E01.mkv`
+
+**Anime:**
+```
+Anime Title (Year)/Season N/Anime Title S01E01.ext
+```
+Example: `Attack on Titan (2013)/Season 1/Attack on Titan S01E01.mkv`
+
+## Rate limiting considerations
+
+The TorBox Metadata Search API has rate limits to ensure fair usage:
+
+<Warning>
+**Important:** When using metadata scanning, you will be subject to rate limiting. Seeing 429 (Too Many Requests) errors is common, especially with large libraries.
+</Warning>
+
+### Understanding rate limits
+
+- The metadata API limits requests per time period
+- Processing large libraries can trigger rate limits
+- 429 errors mean you've exceeded the limit temporarily
+- TorBox Media Center will retry failed requests on the next refresh
+
+### Avoiding rate limit issues
+
+1. **Use slower refresh times** - Set `MOUNT_REFRESH_TIME` to `slow` or `slowest`
+2. **Disable instant refresh** - The `instant` option (6 minutes) can cause excessive API calls
+3. **Consider RAW_MODE** - If you don't need organization, disable metadata entirely
+4. **Process in batches** - Let your library build up over multiple refresh cycles
+
+From library/app.py:24-37:
+```python
+if MOUNT_REFRESH_TIME == "instant":
+    print("!!! Instant mount refresh time may cause rate limiting issues with the API. Use with caution. !!!")
+
+if SCAN_METADATA and RAW_MODE:
+    SCAN_METADATA = False
+    print("!!! RAW_MODE IS NOT COMPATIBLE WITH METADATA SCANNING. Disabling metadata scanning. !!!")
+else:
+    print("!!! Metadata scanning is enabled. This may slow down the processing of files. !!!")
+
+if MOUNT_REFRESH_TIME == "instant" and SCAN_METADATA:
+    print("!!! Using instant mount refresh time with metadata scanning may lead to excessive API calls. Falling back to 'fast' refresh time. !!!")
+    MOUNT_REFRESH_TIME = MountRefreshTimes.fast.value
+else:
+    MOUNT_REFRESH_TIME = MountRefreshTimes[MOUNT_REFRESH_TIME].value
+```
+
+## Refresh time options
+
+When metadata scanning is enabled, the `instant` refresh option becomes available:
+
+| Refresh Time | Interval | Recommended With Metadata? |
+|--------------|----------|---------------------------|
+| slowest      | 24 hours | Yes |
+| very_slow    | 12 hours | Yes |
+| slow         | 6 hours  | Yes |
+| normal       | 3 hours  | Yes |
+| fast         | 2 hours  | Caution |
+| ultra_fast   | 1 hour   | Not recommended |
+| instant      | 6 minutes| No - causes rate limiting |
+
+<Tip>
+If you enable `instant` refresh with metadata scanning, TorBox Media Center automatically falls back to `fast` (2 hours) to prevent excessive API calls.
+</Tip>
+
+## When to disable metadata scanning
+
+Consider disabling metadata scanning if:
+
+- You're experiencing frequent 429 rate limit errors
+- Your media player doesn't need organized folders
+- You prefer to manage organization manually
+- You want faster processing with no API overhead
+- You're using RAW_MODE (it's automatically disabled)
+
+## Parallel processing
+
+Metadata scanning uses parallel processing to handle large libraries efficiently:
+
+From functions/torboxFunctions.py:102-132:
+```python
+# Get the number of CPU cores for parallel processing
+max_workers = int(multiprocessing.cpu_count() * 2 - 1)
+logging.info(f"Processing files with {max_workers} parallel threads")
+
+# Collect all files to process
+files_to_process = []
+for item in file_data:
+    if not item.get("cached", False):
+        continue
+    for file in item.get("files", []):
+        files_to_process.append((item, file))
+
+# Process files in parallel
+with ThreadPoolExecutor(max_workers=max_workers) as executor:
+    # Submit all tasks
+    future_to_file = {
+        executor.submit(process_file, item, file, type): (item, file) 
+        for item, file in files_to_process
+    }
+    
+    # Collect results as they complete
+    for future in as_completed(future_to_file):
+        try:
+            data = future.result()
+            if data:
+                files.append(data)
+        except Exception as e:
+            item, file = future_to_file[future]
+            logging.error(f"Error processing file {file.get('short_name', 'unknown')}: {e}")
+```
+
+This parallel processing:
+- Uses CPU cores efficiently (2x cores - 1 workers)
+- Processes multiple files simultaneously
+- Reduces overall scanning time
+- Handles errors gracefully per file
+
+## Accuracy considerations
+
+Metadata scanning isn't perfect:
+
+- Depends on accurate filename parsing
+- May misidentify content with unusual naming
+- Falls back to placing files in `movies` folder if no match is found
+- Uses the first search result from the API
+
+<Note>
+Most of the time it's best to keep metadata scanning disabled unless your media player absolutely requires organized folders.
+</Note>

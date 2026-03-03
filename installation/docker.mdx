@@ -1,0 +1,268 @@
+---
+title: Docker installation
+description: Install TorBox Media Center using Docker for easy deployment and management
+---
+
+Docker is the recommended installation method for TorBox Media Center. It simplifies deployment and ensures consistent behavior across different systems.
+
+## Prerequisites
+
+- Docker installed on your system ([installation guide](https://www.digitalocean.com/community/tutorials/how-to-install-and-use-docker-on-ubuntu-22-04))
+- A TorBox account on a paid plan ([sign up here](https://torbox.app/subscription))
+- Your TorBox API key from [settings](https://torbox.app/settings)
+
+## Choose your mount method
+
+TorBox Media Center supports two mounting methods:
+
+<Tabs>
+  <Tab title="STRM (recommended)">
+    The STRM method creates small text files (.strm) that point to your media. This method:
+    - Works on all operating systems
+    - Compatible with Jellyfin and Emby
+    - Uses minimal storage (less than 1GB for any library size)
+    - More reliable in Docker environments
+
+    <Note>
+      Use STRM if you're running Jellyfin or Emby, or if you're unsure which method to choose.
+    </Note>
+  </Tab>
+  <Tab title="FUSE">
+    The FUSE method creates a virtual filesystem that mounts files as if they were local. This method:
+    - Works with Plex, VLC, Infuse, and other players
+    - Requires Linux/Unix/BSD/MacOS
+    - Needs additional Docker capabilities
+    - Can be slower and more resource-intensive
+
+    <Note>
+      Use FUSE for Plex, VLC, or any player that doesn't support .strm files.
+    </Note>
+  </Tab>
+</Tabs>
+
+## Docker run command
+
+<Tabs>
+  <Tab title="STRM">
+    <CodeGroup>
+      ```bash Standard (Docker Hub)
+      docker run -it -d \
+          --name=torbox-media-center \
+          --restart=always \
+          --init \
+          -v /home/$(whoami)/torbox:/torbox \
+          -e TORBOX_API_KEY=<EDIT_THIS_KEY> \
+          -e MOUNT_METHOD=strm \
+          -e MOUNT_PATH=/torbox \
+          anonymoussystems/torbox-media-center:latest
+      ```
+
+      ```bash GitHub Container Registry
+      docker run -it -d \
+          --name=torbox-media-center \
+          --restart=always \
+          --init \
+          -v /home/$(whoami)/torbox:/torbox \
+          -e TORBOX_API_KEY=<EDIT_THIS_KEY> \
+          -e MOUNT_METHOD=strm \
+          -e MOUNT_PATH=/torbox \
+          ghcr.io/torbox-app/torbox-media-center:latest
+      ```
+
+      ```bash Custom location
+      docker run -it -d \
+          --name=torbox-media-center \
+          --restart=always \
+          --init \
+          -v /mnt/torbox:/torbox \
+          -e TORBOX_API_KEY=<EDIT_THIS_KEY> \
+          -e MOUNT_METHOD=strm \
+          -e MOUNT_PATH=/torbox \
+          anonymoussystems/torbox-media-center:latest
+      ```
+
+      ```bash Custom container path
+      docker run -it -d \
+          --name=torbox-media-center \
+          --restart=always \
+          --init \
+          -v /mnt/torbox:/data \
+          -e TORBOX_API_KEY=<EDIT_THIS_KEY> \
+          -e MOUNT_METHOD=strm \
+          -e MOUNT_PATH=/data \
+          anonymoussystems/torbox-media-center:latest
+      ```
+
+      ```bash Bleeding edge (main branch)
+      docker run -it -d \
+          --name=torbox-media-center \
+          --restart=always \
+          --init \
+          -v /home/$(whoami)/torbox:/torbox \
+          -e TORBOX_API_KEY=<EDIT_THIS_KEY> \
+          -e MOUNT_METHOD=strm \
+          -e MOUNT_PATH=/torbox \
+          anonymoussystems/torbox-media-center:main
+      ```
+    </CodeGroup>
+
+    <Note>
+      Replace `<EDIT_THIS_KEY>` with your actual TorBox API key from [torbox.app/settings](https://torbox.app/settings).
+    </Note>
+  </Tab>
+  <Tab title="FUSE">
+    ```bash
+    docker run -it -d \
+        --name=torbox-media-center \
+        --restart=always \
+        --init \
+        --cap-add SYS_ADMIN \
+        --device /dev/fuse \
+        -v /mnt/torbox:/torbox:rshared \
+        -e TORBOX_API_KEY=<EDIT_THIS_KEY> \
+        -e MOUNT_METHOD=fuse \
+        -e MOUNT_PATH=/torbox \
+        anonymoussystems/torbox-media-center:latest
+    ```
+
+    <Warning>
+      The `--cap-add SYS_ADMIN` parameter gives the container elevated permissions to access the host system's FUSE device. This is required for the virtual filesystem but should be used with caution. Read more in the [Docker documentation](https://docs.docker.com/reference/cli/docker/container/run/#privileged).
+    </Warning>
+
+    <Note>
+      - The `--device /dev/fuse` parameter provides access to the FUSE device
+      - The `:rshared` volume flag is required for FUSE mounts
+      - Replace `<EDIT_THIS_KEY>` with your TorBox API key
+    </Note>
+  </Tab>
+</Tabs>
+
+## Docker Compose
+
+<Tabs>
+  <Tab title="STRM">
+    ```yaml docker-compose.yaml
+    name: torbox-media-center
+    services:
+        torbox-media-center:
+            container_name: torbox-media-center
+            stdin_open: true
+            tty: true
+            restart: always
+            volumes:
+                - /home/$(whoami)/torbox:/torbox
+            environment:
+                - TORBOX_API_KEY=<input your api key>
+                - MOUNT_METHOD=strm
+                - MOUNT_PATH=/torbox
+                - RAW_MODE=false
+                - ENABLE_METADATA=false
+                - MOUNT_REFRESH_TIME=slow
+            image: anonymoussystems/torbox-media-center:latest
+    ```
+
+    <Note>
+      You can use this compose file with [Portainer](https://www.portainer.io/) or run it with `docker compose up -d`.
+    </Note>
+  </Tab>
+  <Tab title="FUSE">
+    ```yaml docker-compose.yaml
+    name: torbox-media-center
+    services:
+        torbox-media-center:
+            container_name: torbox-media-center
+            stdin_open: true
+            tty: true
+            restart: always
+            volumes:
+                - /mnt/torbox:/torbox:rshared
+            devices:
+                - /dev/fuse:/dev/fuse
+            environment:
+                - TORBOX_API_KEY=<input your api key>
+                - MOUNT_METHOD=fuse
+                - MOUNT_PATH=/torbox
+            cap_add:
+                - SYS_ADMIN
+            security_opt:
+                - apparmor:unconfined
+            image: anonymoussystems/torbox-media-center:latest
+    ```
+
+    <Warning>
+      FUSE requires `SYS_ADMIN` capability and access to `/dev/fuse`. Ensure your Docker host supports FUSE.
+    </Warning>
+  </Tab>
+</Tabs>
+
+## Volume configurations
+
+The volume mount determines where your media files will be accessible on your host system.
+
+### Standard configuration
+
+```bash
+-v /home/$(whoami)/torbox:/torbox
+```
+
+Files will be accessible at `/home/yourusername/torbox` on your host system.
+
+### Custom host location
+
+```bash
+-v /mnt/torbox:/torbox
+```
+
+Files will be accessible at `/mnt/torbox` on your host system.
+
+### Custom container path
+
+```bash
+-v /mnt/torbox:/data
+-e MOUNT_PATH=/data
+```
+
+Files stored at `/mnt/torbox` on the host, but the container uses `/data` internally. Make sure `MOUNT_PATH` matches the container path.
+
+## Environment variables
+
+Required:
+- `TORBOX_API_KEY` - Your TorBox API key from [torbox.app/settings](https://torbox.app/settings)
+
+Optional:
+- `MOUNT_METHOD` - Either `strm` or `fuse` (default: `strm`)
+- `MOUNT_PATH` - Path inside the container where files are mounted (default: `/torbox`)
+- `MOUNT_REFRESH_TIME` - How often to check for new files: `slowest` (24h), `very_slow` (12h), `slow` (6h), `normal` (3h), `fast` (2h), `ultra_fast` (1h), or `instant` (6min, requires metadata) (default: `normal`)
+- `ENABLE_METADATA` - Enable metadata scanning to organize files into movies/series folders (default: `false`)
+- `RAW_MODE` - Use raw file structure without metadata organization (default: `false`)
+- `PUID` - User ID for file permissions
+- `PGID` - Group ID for file permissions
+
+## Converting to Docker Compose
+
+If you have a Docker run command and want to convert it to Docker Compose format, use [Composerize](https://www.composerize.com/). Simply paste your Docker run command and it will generate the equivalent compose configuration.
+
+## Image tags
+
+- `latest` - Latest stable release (recommended)
+- `main` - Bleeding edge from the main branch (for testing)
+- `sha-<hash>` - Specific commit version (e.g., `sha-bdd4339`)
+
+## Next steps
+
+After starting the container:
+
+1. Check the logs to ensure it's running correctly:
+   ```bash
+   docker logs -f torbox-media-center
+   ```
+
+2. Your media files will appear at the mount path you specified (e.g., `/home/yourusername/torbox`)
+
+3. Configure your media server (Jellyfin, Emby, Plex) to use the mounted path:
+   - Movies: `<mount_path>/movies`
+   - TV Shows: `<mount_path>/series`
+
+<Note>
+See the [Troubleshooting](/troubleshooting) guide if files aren't appearing or your media server can't access them.
+</Note>
